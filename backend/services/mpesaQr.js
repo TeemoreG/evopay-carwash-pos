@@ -21,7 +21,7 @@ async function getToken() {
   if (token && Date.now() < expires - 60000) return token;
   const auth = Buffer.from(`${CONSUMER_KEY}:${CONSUMER_SECRET}`).toString('base64');
   const r = await axios.get(
-    `${BASE_URL}/oauth/v2/generate?grant_type=client_credentials`,
+    `${BASE_URL}/oauth/v1/generate?grant_type=client_credentials`,
     { headers: { Authorization: `Basic ${auth}` }, timeout: 10000 }
   );
   if (!r.data?.access_token) throw new Error('No access token from M-PESA');
@@ -45,7 +45,7 @@ async function generateMpesaQR({ merchantName, refNo, amount, size = '300' }) {
   };
 
   const r = await axios.post(
-    `${BASE_URL}/mpesa/qrcode/v2/generate`,
+    `${BASE_URL}/mpesa/qrcode/v1/generate`,
     payload,
     { headers: { Authorization: `Bearer ${t}` }, timeout: 15000 }
   );

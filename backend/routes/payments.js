@@ -28,7 +28,7 @@ async function getMpesaAccessToken() {
   }
   const auth = Buffer.from(`${CONSUMER_KEY}:${CONSUMER_SECRET}`).toString('base64');
   const res = await axios.get(
-    `${BASE_URL}/oauth/v2/generate?grant_type=client_credentials`,
+    `${BASE_URL}/oauth/v1/generate?grant_type=client_credentials`,
     { headers: { Authorization: `Basic ${auth}` }, timeout: 10000 }
   );
   if (!res.data?.access_token) throw new Error('No access token from M-PESA');
@@ -218,7 +218,7 @@ router.post('/stk-push', async (req, res) => {
     };
 
     const response = await axios.post(
-      `${BASE_URL}/mpesa/stkpush/v2/processrequest`,
+      `${BASE_URL}/mpesa/stkpush/v1/processrequest`,
       payload,
       { headers: { Authorization: `Bearer ${token}` }, timeout: 15000 }
     );
