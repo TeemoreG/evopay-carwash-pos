@@ -4,7 +4,7 @@ import { toast } from 'react-toastify';
 import { generateMpesaQR } from '../../api/vscuApi';
 
 const QRPaymentModal = ({ invoice, amount, saleId, onMarkPaid, onCancel, onStkPush, onPoll }) => {
-  const [mode, setMode] = useState('mpesa');           // 'mpesa' | 'custom'
+  const [mode, setMode] = useState('mpesa');
   const [mpesaQr, setMpesaQr] = useState(null);
   const [customQr, setCustomQr] = useState(null);
   const [loadingQr, setLoadingQr] = useState(false);
