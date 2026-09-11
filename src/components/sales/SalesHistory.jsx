@@ -104,7 +104,7 @@ const SalesHistory = ({ sales, loading, onRetry, onDownloadReceipt }) => {
                 <td className="py-2.5 font-mono text-xs font-semibold text-[#1a2a4a]">
                   {sale.invoice_no || sale.invoiceNo || 'N/A'}
                 </td>
-                <td className="py-2.5 text-slate-700 max-w-[120px] truncate text-sm">
+                <td className="py-2.5 text-slate-700 max-w-30 truncate text-sm">
                   {sale.customer || 'Walk-in Customer'}
                 </td>
                 <td className="py-2.5 text-slate-500 hidden sm:table-cell text-sm">

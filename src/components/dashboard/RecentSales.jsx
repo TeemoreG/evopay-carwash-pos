@@ -44,7 +44,7 @@ const RecentSales = ({ sales, loading, onViewAll }) => {
       {sales.length === 0 ? (
         <div className="text-center py-10 text-slate-400 text-sm">No sales recorded yet.</div>
       ) : (
-        <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
+        <div className="overflow-x-auto max-h-125 overflow-y-auto">
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-white z-10">
               <tr className="text-left text-slate-500 border-b border-slate-200">
@@ -62,7 +62,7 @@ const RecentSales = ({ sales, loading, onViewAll }) => {
                   <td className="py-3 pr-3 font-mono text-xs font-semibold text-[#1a2a4a]">
                     {sale.invoice_no || sale.invoiceNo || 'N/A'}
                   </td>
-                  <td className="py-3 pr-3 text-slate-700 max-w-[100px] truncate text-sm">
+                  <td className="py-3 pr-3 text-slate-700 max-w-25 truncate text-sm">
                     {sale.customer || 'N/A'}
                   </td>
                   <td className="py-3 pr-3 text-slate-500 hidden md:table-cell text-sm">

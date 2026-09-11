@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import ServiceGrid from '../components/pos/ServiceGrid';
 import Cart from '../components/pos/Cart';
@@ -86,14 +86,16 @@ const Sales = () => {
     let disc = 0;
     if (discount.type === 'percentage' && discount.value) disc = (subtotal * parseFloat(discount.value)) / 100;
     else if (discount.type === 'fixed' && discount.value) disc = parseFloat(discount.value);
-    const total = Math.max(0, subtotal - disc);
+    const total = Math.max(0, Math.round(subtotal - disc));
 
     return {
       invoice_no: invoice,
       customer: customer.trim() || 'Walk-in Customer',
       customer_pin: customerPin.trim() || '',
       cashier: user?.full_name || user?.username || 'Unknown',
-      subtotal, tax, total,
+      subtotal: Math.round(subtotal),
+      tax: Math.round(tax),
+      total,
       discount_type: discount.type,
       discount_value: discount.value || null,
       payment_method: method,
@@ -123,7 +125,9 @@ const Sales = () => {
   const getInvoice = async () => {
     try {
       const r = await getNextInvoice();
-      return r.data?.invoice_no;
+      const inv = r.data?.invoice_no;
+      if (inv) return inv;
+      throw new Error('No invoice');
     } catch {
       const d = new Date();
       const ymd = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
@@ -145,6 +149,7 @@ const Sales = () => {
       fetchData();
       toast.success('Sale completed');
     } catch (e) {
+      console.error(e);
       toast.error('Failed to save sale');
     } finally { setSaving(false); }
   };
@@ -155,18 +160,34 @@ const Sales = () => {
     try {
       const invoice = await getInvoice();
       const payload = buildPayload(invoice, 'Pending', '03');
+
+      if (!payload.total || isNaN(payload.total)) {
+        toast.error('Cart total is invalid');
+        setSaving(false);
+        return;
+      }
+
       const res = await saveSales(payload);
       const saved = res?.data?.sale || payload;
       const saleId = res?.data?.saleId || saved.id;
+      if (!saleId) throw new Error('Sale ID missing');
+
       await createQRSession({
         invoice_no: invoice,
-        amount: payload.total,
+        amount: Number(payload.total),
         sale_id: saleId,
       });
-      setQrSession({ invoice, amount: payload.total, sale: { ...saved, ...payload } });
+
+      setQrSession({
+        invoice: String(invoice),
+        amount: Number(payload.total),
+        sale: { ...saved, ...payload },
+      });
+
       resetCart();
       fetchData();
     } catch (e) {
+      console.error('QR error:', e);
       toast.error('Failed to create QR session');
     } finally { setSaving(false); }
   };
@@ -240,7 +261,7 @@ const Sales = () => {
         onDownloadReceipt={() => {}}
       />
 
-      {qrSession && (
+      {qrSession?.invoice && qrSession?.amount > 0 && (
         <QRPaymentModal
           invoice={qrSession.invoice}
           amount={qrSession.amount}

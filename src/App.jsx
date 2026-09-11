@@ -1,26 +1,26 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { ToastContainer } from 'react-toastify';  
-import 'react-toastify/dist/ReactToastify.css';  
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 import { useAuth } from './context/AuthContext';
-import Layout from './components/layout/Layout.jsx';  
-import Login from './pages/Login.jsx';              
-import Dashboard from './pages/Dashboard.jsx';       
-import Items from './pages/Items.jsx';               
-import Sales from './pages/Sales.jsx';              
-import Reports from './pages/Reports.jsx';          
-import Legal from './pages/Legal.jsx';              
-import Stock from './pages/Stock.jsx';              
-import Purchases from './pages/Purchases.jsx'; 
-import Imports from './pages/Imports.jsx';     
+import Layout from './components/layout/Layout.jsx';
+import Login from './pages/Login.jsx';
+import Dashboard from './pages/Dashboard.jsx';
+import Items from './pages/Items.jsx';
+import Sales from './pages/Sales.jsx';
+import Reports from './pages/Reports.jsx';
+import Legal from './pages/Legal.jsx';
+import Stock from './pages/Stock.jsx';
+import Purchases from './pages/Purchases.jsx';
+import Imports from './pages/Imports.jsx';
 import DataManagement from './pages/DataManagement.jsx';
-import Branches from './pages/Branches.jsx';    
-import Settings from './pages/Settings.jsx';  
+import Branches from './pages/Branches.jsx';
+import Settings from './pages/Settings.jsx';
 import Cashiers from './pages/Cashiers.jsx';
 import Notices from './pages/Notices.jsx';
 import Customers from './pages/Customers.jsx';
-import AdminRoute from './components/AdminRoute.jsx'; 
+import PayPage from './pages/PayPage.jsx';   // ← NEW
+import AdminRoute from './components/AdminRoute.jsx';
 
-// Protected Route Component
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
 
@@ -32,20 +32,14 @@ const ProtectedRoute = ({ children }) => {
     );
   }
 
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
-
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
   return children;
 };
 
 function App() {
-  const { isAuthenticated } = useAuth();
-
   return (
     <>
-      {/* ToastContainer must be here - outside Routes */}
-      <ToastContainer 
+      <ToastContainer
         position="top-right"
         autoClose={3000}
         hideProgressBar={false}
@@ -57,40 +51,30 @@ function App() {
         pauseOnHover
         theme="light"
       />
-      
+
       <Routes>
-        {/* Public Route - Login */}
+        {/* Public — no auth, no layout */}
         <Route path="/login" element={<Login />} />
-        
-        {/* Protected Routes - Require Login */}
-        <Route path="/" element={
-          <ProtectedRoute>
-            <Layout />
-          </ProtectedRoute>
-        }>
+        <Route path="/pay/:invoice" element={<PayPage />} />   {/* ← NEW */}
+
+        {/* Protected */}
+        <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
           <Route index element={<Dashboard />} />
           <Route path="items" element={<Items />} />
           <Route path="sales" element={<Sales />} />
           <Route path="stock" element={<Stock />} />
-          <Route path="purchases" element={<Purchases />} /> 
-          <Route path="imports" element={<Imports />} />  
+          <Route path="purchases" element={<Purchases />} />
+          <Route path="imports" element={<Imports />} />
           <Route path="notices" element={<Notices />} />
           <Route path="customers" element={<Customers />} />
           <Route path="data" element={<DataManagement />} />
-          <Route path="branches" element={<Branches />} /> 
-          <Route path="settings" element={<Settings />} /> 
+          <Route path="branches" element={<Branches />} />
+          <Route path="settings" element={<Settings />} />
           <Route path="reports" element={<Reports />} />
           <Route path="legal" element={<Legal />} />
-          
-          {/* Admin Only Routes */}
-          <Route path="cashiers" element={
-            <AdminRoute>
-              <Cashiers />
-            </AdminRoute>
-          } />
+          <Route path="cashiers" element={<AdminRoute><Cashiers /></AdminRoute>} />
         </Route>
-        
-        {/* Catch all - redirect to home */}
+
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </>
