@@ -1,0 +1,38 @@
+services:
+  - type: web
+    name: evopay-carwash-api
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: TURSO_DATABASE_URL
+        sync: false
+      - key: TURSO_AUTH_TOKEN
+        sync: false
+      - key: VSCU_URL
+        value: http://192.168.100.2:8090
+      - key: TIN
+        value: P600004407A
+      - key: BHF_ID
+        value: "00"
+      - key: CMCKEY
+        value: D3B478EDFBE54536B8DC9DA691A51440E6278C18104D4D6D904F
+      - key: MPESA_ENV
+        value: sandbox
+      - key: MPESA_CONSUMER_KEY
+        sync: false
+      - key: MPESA_CONSUMER_SECRET
+        sync: false
+      - key: MPESA_SHORTCODE
+        value: "174379"
+      - key: MPESA_PASSKEY
+        sync: false
+      - key: MPESA_CALLBACK_URL
+        value: https://evopay-carwash-api.onrender.com/api/pay/mpesa-callback
+      - key: VITE_PAYMENT_BASE_URL
+        sync: false
