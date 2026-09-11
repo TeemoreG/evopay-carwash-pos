@@ -15,8 +15,15 @@ const Branches = () => {
   const [syncMessage, setSyncMessage] = useState('');
   const [fetchingFromVSCU, setFetchingFromVSCU] = useState(false);
   const [lastSyncDate, setLastSyncDate] = useState('');
-  
-  // User form state
+  const [activeTab, setActiveTab] = useState('branches');
+  const [selectedBranchId, setSelectedBranchId] = useState('00');
+
+  const [branchUsers, setBranchUsers] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+
+  const [branchInsurance, setBranchInsurance] = useState([]);
+  const [loadingInsurance, setLoadingInsurance] = useState(false);
+
   const [showUserForm, setShowUserForm] = useState(false);
   const [userData, setUserData] = useState({
     userId: '',
@@ -26,8 +33,7 @@ const Branches = () => {
     useYn: 'Y'
   });
   const [savingUser, setSavingUser] = useState(false);
-  
-  // Insurance form state
+
   const [showInsuranceForm, setShowInsuranceForm] = useState(false);
   const [insuranceData, setInsuranceData] = useState({
     isrccCd: '',
@@ -36,7 +42,7 @@ const Branches = () => {
     useYn: 'Y'
   });
   const [savingInsurance, setSavingInsurance] = useState(false);
-  
+
   const [formData, setFormData] = useState({
     bhf_id: '',
     bhf_name: '',
@@ -55,11 +61,26 @@ const Branches = () => {
     use_yn: 'Y'
   });
 
+  const VITE_TIN = import.meta.env.VITE_VSCU_TIN || '';
+  const VITE_BHF_ID = import.meta.env.VITE_VSCU_BHF_ID || '00';
+
   useEffect(() => {
     fetchBranches();
     checkVSCU();
     fetchBranchSyncStatus();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === 'users' && selectedBranchId) {
+      fetchBranchUsers(selectedBranchId);
+    }
+  }, [activeTab, selectedBranchId]);
+
+  useEffect(() => {
+    if (activeTab === 'insurance' && selectedBranchId) {
+      fetchBranchInsurance(selectedBranchId);
+    }
+  }, [activeTab, selectedBranchId]);
 
   const checkVSCU = async () => {
     try {
@@ -75,11 +96,40 @@ const Branches = () => {
       setLoading(true);
       const response = await getBranches();
       setBranches(response.data || []);
+      if (response.data && response.data.length > 0) {
+        setSelectedBranchId(response.data[0].bhf_id || response.data[0].bhfId || '00');
+      }
     } catch (error) {
       console.error('Failed to fetch branches:', error);
       toast.error('Error loading branches');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchBranchUsers = async (bhfId) => {
+    setLoadingUsers(true);
+    try {
+      const response = await axiosInstance.get(`/api/branches/${bhfId}/users`);
+      setBranchUsers(response.data || []);
+    } catch (error) {
+      console.error('Failed to fetch branch users:', error);
+      setBranchUsers([]);
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
+  const fetchBranchInsurance = async (bhfId) => {
+    setLoadingInsurance(true);
+    try {
+      const response = await axiosInstance.get(`/api/branches/${bhfId}/insurance`);
+      setBranchInsurance(response.data || []);
+    } catch (error) {
+      console.error('Failed to fetch branch insurance:', error);
+      setBranchInsurance([]);
+    } finally {
+      setLoadingInsurance(false);
     }
   };
 
@@ -100,7 +150,6 @@ const Branches = () => {
     }
   };
 
-  // Sync branches from VSCU - BULK SAVE
   const syncFromVSCU = async () => {
     if (!vscuOnline) {
       toast.error('VSCU is offline. Please start VSCU first.');
@@ -111,24 +160,16 @@ const Branches = () => {
     setSyncMessage('Fetching branches from KRA...');
     try {
       const response = await getBranchesFromVSCU('20200101000000');
-      
-      console.log('Branches VSCU Response:', response.data);
-      
+
       if (response.data?.resultCd === '000') {
         const branchList = response.data?.data?.bhfList || [];
-        
+
         if (branchList.length > 0) {
-          try {
-            await axiosInstance.post('/api/branches/bulk', branchList);
-            await fetchBranches();
-            setLastSyncDate(new Date().toISOString().replace(/[-:T.]/g, '').slice(0, 14));
-            toast.success(`Synced ${branchList.length} branches from KRA`);
-            setSyncMessage(`Synced ${branchList.length} branches`);
-          } catch (err) {
-            console.error('Failed to bulk save branches:', err);
-            toast.error('Failed to save branches');
-            setSyncMessage('Save failed');
-          }
+          await axiosInstance.post('/api/branches/bulk', branchList);
+          await fetchBranches();
+          setLastSyncDate(new Date().toISOString().replace(/[-:T.]/g, '').slice(0, 14));
+          toast.success(`Synced ${branchList.length} branches from KRA`);
+          setSyncMessage(`Synced ${branchList.length} branches`);
         } else {
           toast.info('No branches found in KRA');
           setSyncMessage('No new branches');
@@ -147,9 +188,77 @@ const Branches = () => {
     }
   };
 
-  // ============================================
-  // SAVE BRANCH USER TO VSCU
-  // ============================================
+  const sendUserToKRA = async (user) => {
+    if (!vscuOnline) {
+      toast.error('VSCU is offline. Please start VSCU first.');
+      return;
+    }
+
+    const payload = {
+      tin: VITE_TIN,
+      bhfId: selectedBranchId || '00',
+      userId: user.user_id,
+      userNm: user.user_name || user.full_name || user.user_id,
+      pwd: '12345678',
+      adrs: null,
+      cntc: null,
+      authCd: null,
+      remark: null,
+      useYn: user.use_yn || 'Y',
+      regrNm: 'Admin',
+      regrId: 'Admin',
+      modrNm: 'Admin',
+      modrId: 'Admin'
+    };
+
+    try {
+      const response = await axiosInstance.post('/api/branches/saveBrancheUsers', payload);
+      if (response.data?.resultCd === '000' || response.data?.resultCd === '00') {
+        toast.success(`User ${user.user_id} sent to KRA successfully`);
+        await fetchBranchUsers(selectedBranchId);
+      } else {
+        toast.warning(response.data?.resultMsg || 'Failed to send user to KRA');
+      }
+    } catch (error) {
+      console.error('Failed to send user to KRA:', error);
+      toast.error('Failed to send user to KRA');
+    }
+  };
+
+  const sendInsuranceToKRA = async (ins) => {
+    if (!vscuOnline) {
+      toast.error('VSCU is offline. Please start VSCU first.');
+      return;
+    }
+
+    const payload = {
+      tin: VITE_TIN,
+      bhfId: selectedBranchId || '00',
+      isrccCd: ins.isrcc_cd,
+      isrccNm: ins.isrcc_nm,
+      isrcRt: ins.isrc_rt || 0,
+      regrNm: 'Admin',
+      regrId: 'Admin',
+      modrNm: 'Admin',
+      modrId: 'Admin',
+      useYn: ins.use_yn || 'Y',
+      remark: null
+    };
+
+    try {
+      const response = await axiosInstance.post('/api/branches/saveBrancheInsurances', payload);
+      if (response.data?.resultCd === '000' || response.data?.resultCd === '00') {
+        toast.success(`Insurance ${ins.isrcc_cd} sent to KRA successfully`);
+        await fetchBranchInsurance(selectedBranchId);
+      } else {
+        toast.warning(response.data?.resultMsg || 'Failed to send insurance to KRA');
+      }
+    } catch (error) {
+      console.error('Failed to send insurance to KRA:', error);
+      toast.error('Failed to send insurance to KRA');
+    }
+  };
+
   const saveBranchUser = async () => {
     if (!vscuOnline) {
       toast.error('VSCU is offline. Please start VSCU first.');
@@ -161,24 +270,37 @@ const Branches = () => {
       return;
     }
 
+    if (!userData.userPwd || userData.userPwd.length < 4) {
+      toast.error('Password must be at least 4 characters');
+      return;
+    }
+
     setSavingUser(true);
     try {
       const payload = {
+        tin: VITE_TIN,
+        bhfId: selectedBranchId || '00',
         userId: userData.userId,
         userNm: userData.userNm,
-        userPwd: userData.userPwd || null,
-        userTyCd: userData.userTyCd || '01',
+        pwd: userData.userPwd,
+        adrs: null,
+        cntc: null,
+        authCd: null,
+        remark: null,
         useYn: userData.useYn || 'Y',
-        tin: import.meta.env.VITE_VSCU_TIN || 'P600003965A',
-        bhfId: import.meta.env.VITE_VSCU_BHF_ID || '00'
+        regrNm: 'Admin',
+        regrId: 'Admin',
+        modrNm: 'Admin',
+        modrId: 'Admin'
       };
 
       const response = await axiosInstance.post('/api/branches/saveBrancheUsers', payload);
-      
+
       if (response.data?.resultCd === '000' || response.data?.resultCd === '00') {
         toast.success(`User "${userData.userNm}" synced to KRA successfully`);
         setShowUserForm(false);
         setUserData({ userId: '', userNm: '', userPwd: '', userTyCd: '01', useYn: 'Y' });
+        await fetchBranchUsers(selectedBranchId);
       } else {
         toast.warning(response.data?.resultMsg || 'Failed to sync user');
       }
@@ -190,9 +312,6 @@ const Branches = () => {
     }
   };
 
-  // ============================================
-  // SAVE BRANCH INSURANCE TO VSCU
-  // ============================================
   const saveBranchInsurance = async () => {
     if (!vscuOnline) {
       toast.error('VSCU is offline. Please start VSCU first.');
@@ -204,29 +323,48 @@ const Branches = () => {
       return;
     }
 
+    if (!insuranceData.isrccRate || parseFloat(insuranceData.isrccRate) <= 0) {
+      toast.error('Insurance rate is required and must be greater than 0');
+      return;
+    }
+
     setSavingInsurance(true);
     try {
       const payload = {
+        tin: VITE_TIN,
+        bhfId: selectedBranchId || '00',
         isrccCd: insuranceData.isrccCd,
         isrccNm: insuranceData.isrccNm,
-        isrccRate: parseFloat(insuranceData.isrccRate) || 0,
+        isrcRt: parseFloat(insuranceData.isrccRate) || 0,
+        regrNm: 'Admin',
+        regrId: 'Admin',
+        modrNm: 'Admin',
+        modrId: 'Admin',
         useYn: insuranceData.useYn || 'Y',
-        tin: import.meta.env.VITE_VSCU_TIN || 'P600003965A',
-        bhfId: import.meta.env.VITE_VSCU_BHF_ID || '00'
+        remark: null
       };
 
       const response = await axiosInstance.post('/api/branches/saveBrancheInsurances', payload);
-      
+
       if (response.data?.resultCd === '000' || response.data?.resultCd === '00') {
         toast.success(`Insurance "${insuranceData.isrccNm}" synced to KRA successfully`);
         setShowInsuranceForm(false);
         setInsuranceData({ isrccCd: '', isrccNm: '', isrccRate: '', useYn: 'Y' });
+        await fetchBranchInsurance(selectedBranchId);
       } else {
         toast.warning(response.data?.resultMsg || 'Failed to sync insurance');
+        console.error('VSCU Error:', response.data);
       }
     } catch (error) {
       console.error('Failed to save branch insurance:', error);
-      toast.error('Failed to sync insurance to KRA');
+      const errorMsg = error.response?.data?.error || 
+                       error.response?.data?.resultMsg || 
+                       error.response?.data?.message ||
+                       'Failed to sync insurance to KRA';
+      toast.error(errorMsg);
+      if (error.response?.data) {
+        console.error('VSCU Error Details:', JSON.stringify(error.response.data, null, 2));
+      }
     } finally {
       setSavingInsurance(false);
     }
@@ -328,6 +466,13 @@ const Branches = () => {
     return <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-medium">Branch</span>;
   };
 
+  const getSyncedBadge = (synced) => {
+    if (synced === 1) {
+      return <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">Synced</span>;
+    }
+    return <span className="px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full text-xs font-medium">Local Only</span>;
+  };
+
   return (
     <div className="p-4">
       <ToastContainer position="top-right" autoClose={3000} />
@@ -366,9 +511,9 @@ const Branches = () => {
 
           <button
             onClick={() => setShowUserForm(true)}
-            disabled={!vscuOnline}
+            disabled={!vscuOnline || !selectedBranchId}
             className={`px-4 py-2 rounded-lg transition flex items-center gap-2 ${
-              !vscuOnline
+              !vscuOnline || !selectedBranchId
                 ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 : 'bg-[#1a2a4a] hover:bg-[#2a3a5a] text-white'
             }`}
@@ -382,9 +527,9 @@ const Branches = () => {
 
           <button
             onClick={() => setShowInsuranceForm(true)}
-            disabled={!vscuOnline}
+            disabled={!vscuOnline || !selectedBranchId}
             className={`px-4 py-2 rounded-lg transition flex items-center gap-2 ${
-              !vscuOnline
+              !vscuOnline || !selectedBranchId
                 ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 : 'bg-[#1a2a4a] hover:bg-[#2a3a5a] text-white'
             }`}
@@ -419,7 +564,6 @@ const Branches = () => {
         </div>
       </div>
 
-      {/* VSCU Status Bar */}
       <div className="flex items-center gap-3 mb-4 bg-white px-4 py-2 rounded-lg shadow-sm border border-gray-100">
         <span className={`inline-block w-2 h-2 rounded-full ${vscuOnline ? 'bg-green-500' : 'bg-red-500'}`}></span>
         <span className="text-xs font-medium text-gray-600">
@@ -449,7 +593,39 @@ const Branches = () => {
         </span>
       </div>
 
-      {/* Branch Form */}
+      <div className="flex border-b border-gray-200 mb-4">
+        <button
+          onClick={() => setActiveTab('branches')}
+          className={`px-4 py-2 text-sm font-medium transition ${
+            activeTab === 'branches'
+              ? 'border-b-2 border-[#f47b20] text-[#f47b20]'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Branches
+        </button>
+        <button
+          onClick={() => setActiveTab('users')}
+          className={`px-4 py-2 text-sm font-medium transition ${
+            activeTab === 'users'
+              ? 'border-b-2 border-[#f47b20] text-[#f47b20]'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Users ({branchUsers.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('insurance')}
+          className={`px-4 py-2 text-sm font-medium transition ${
+            activeTab === 'insurance'
+              ? 'border-b-2 border-[#f47b20] text-[#f47b20]'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Insurance ({branchInsurance.length})
+        </button>
+      </div>
+
       {showForm && (
         <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6 mb-6">
           <h2 className="text-lg font-semibold text-[#1a2a4a] mb-4">
@@ -626,186 +802,7 @@ const Branches = () => {
         </div>
       )}
 
-      {/* User Form Modal */}
-      {showUserForm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
-            <div className="flex justify-between items-center p-5 border-b">
-              <h2 className="text-lg font-semibold text-[#1a2a4a]">Sync Branch User to KRA</h2>
-              <button
-                onClick={() => setShowUserForm(false)}
-                className="text-gray-400 hover:text-gray-600 text-2xl"
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="p-5 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">User ID *</label>
-                <input
-                  type="text"
-                  value={userData.userId}
-                  onChange={(e) => setUserData({ ...userData, userId: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f47b20] focus:border-transparent"
-                  placeholder="e.g., cashier01"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">User Name *</label>
-                <input
-                  type="text"
-                  value={userData.userNm}
-                  onChange={(e) => setUserData({ ...userData, userNm: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f47b20] focus:border-transparent"
-                  placeholder="e.g., John Doe"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-                <input
-                  type="password"
-                  value={userData.userPwd}
-                  onChange={(e) => setUserData({ ...userData, userPwd: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f47b20] focus:border-transparent"
-                  placeholder="Enter password"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">User Type</label>
-                <select
-                  value={userData.userTyCd}
-                  onChange={(e) => setUserData({ ...userData, userTyCd: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f47b20] focus:border-transparent"
-                >
-                  <option value="01">Cashier</option>
-                  <option value="02">Manager</option>
-                  <option value="03">Administrator</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                <select
-                  value={userData.useYn}
-                  onChange={(e) => setUserData({ ...userData, useYn: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f47b20] focus:border-transparent"
-                >
-                  <option value="Y">Active</option>
-                  <option value="N">Inactive</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3 p-5 border-t bg-gray-50 rounded-b-xl">
-              <button
-                onClick={() => setShowUserForm(false)}
-                className="px-5 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 transition font-medium"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={saveBranchUser}
-                disabled={savingUser || !userData.userId || !userData.userNm}
-                className={`px-5 py-2 text-sm bg-[#f47b20] hover:bg-[#e06d1a] text-white rounded-lg transition font-medium flex items-center gap-2 ${
-                  (savingUser || !userData.userId || !userData.userNm) ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
-              >
-                {savingUser ? 'Syncing...' : 'Sync to KRA'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Insurance Form Modal */}
-      {showInsuranceForm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
-            <div className="flex justify-between items-center p-5 border-b">
-              <h2 className="text-lg font-semibold text-[#1a2a4a]">Sync Branch Insurance to KRA</h2>
-              <button
-                onClick={() => setShowInsuranceForm(false)}
-                className="text-gray-400 hover:text-gray-600 text-2xl"
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="p-5 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Insurance Code *</label>
-                <input
-                  type="text"
-                  value={insuranceData.isrccCd}
-                  onChange={(e) => setInsuranceData({ ...insuranceData, isrccCd: e.target.value.toUpperCase() })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f47b20] focus:border-transparent"
-                  placeholder="e.g., INS001"
-                  required                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Insurance Name *</label>
-                <input
-                  type="text"
-                  value={insuranceData.isrccNm}
-                  onChange={(e) => setInsuranceData({ ...insuranceData, isrccNm: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f47b20] focus:border-transparent"
-                  placeholder="e.g., NHIF Cover"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Rate (%)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={insuranceData.isrccRate}
-                  onChange={(e) => setInsuranceData({ ...insuranceData, isrccRate: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f47b20] focus:border-transparent"
-                  placeholder="e.g., 2.5"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                <select
-                  value={insuranceData.useYn}
-                  onChange={(e) => setInsuranceData({ ...insuranceData, useYn: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f47b20] focus:border-transparent"
-                >
-                  <option value="Y">Active</option>
-                  <option value="N">Inactive</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3 p-5 border-t bg-gray-50 rounded-b-xl">
-              <button
-                onClick={() => setShowInsuranceForm(false)}
-                className="px-5 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 transition font-medium"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={saveBranchInsurance}
-                disabled={savingInsurance || !insuranceData.isrccCd || !insuranceData.isrccNm}
-                className={`px-5 py-2 text-sm bg-[#f47b20] hover:bg-[#e06d1a] text-white rounded-lg transition font-medium flex items-center gap-2 ${
-                  (savingInsurance || !insuranceData.isrccCd || !insuranceData.isrccNm) ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
-              >
-                {savingInsurance ? 'Syncing...' : 'Sync to KRA'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Table */}
-      {loading ? (
-        <div className="flex justify-center py-12">
-          <div className="h-8 w-8 border-4 border-[#f47b20] border-t-transparent rounded-full animate-spin"></div>
-        </div>
-      ) : (
+      {activeTab === 'branches' && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -824,7 +821,13 @@ const Branches = () => {
                 </tr>
               </thead>
               <tbody>
-                {branches.length === 0 ? (
+                {loading ? (
+                  <tr>
+                    <td colSpan="10" className="px-4 py-8 text-center">
+                      <div className="h-8 w-8 border-4 border-[#f47b20] border-t-transparent rounded-full animate-spin mx-auto"></div>
+                    </td>
+                  </tr>
+                ) : branches.length === 0 ? (
                   <tr>
                     <td colSpan="10" className="px-4 py-8 text-center text-gray-400">
                       No branches found. Click "Add Branch" to create one or "Sync from KRA" to fetch.
@@ -832,7 +835,17 @@ const Branches = () => {
                   </tr>
                 ) : (
                   branches.map((branch) => (
-                    <tr key={branch.bhf_id || branch.bhfId} className="border-b border-gray-50 hover:bg-gray-50 transition">
+                    <tr 
+                      key={branch.bhf_id || branch.bhfId} 
+                      className={`border-b border-gray-50 hover:bg-gray-50 transition cursor-pointer ${
+                        (branch.bhf_id || branch.bhfId) === selectedBranchId ? 'bg-blue-50' : ''
+                      }`}
+                      onClick={() => {
+                        setSelectedBranchId(branch.bhf_id || branch.bhfId);
+                        if (activeTab === 'users') fetchBranchUsers(branch.bhf_id || branch.bhfId);
+                        if (activeTab === 'insurance') fetchBranchInsurance(branch.bhf_id || branch.bhfId);
+                      }}
+                    >
                       <td className="px-4 py-3 font-mono text-xs text-gray-600">
                         {branch.bhf_id || branch.bhfId}
                       </td>
@@ -862,13 +875,14 @@ const Branches = () => {
                       </td>
                       <td className="px-4 py-3 text-right">
                         <button
-                          onClick={() => handleEdit(branch)}
+                          onClick={(e) => { e.stopPropagation(); handleEdit(branch); }}
                           className="text-[#1a2a4a] hover:text-[#0f1a33] text-xs mr-3"
                         >
                           Edit
                         </button>
                         <button
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             if (window.confirm('Delete this branch?')) {
                               toast.info('Delete function coming soon');
                             }
@@ -883,6 +897,354 @@ const Branches = () => {
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'users' && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="p-3 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
+            <span className="text-sm font-medium text-gray-700">
+              Users for Branch: <span className="text-[#1a2a4a]">{selectedBranchId}</span>
+            </span>
+            <span className="text-xs text-gray-500">{branchUsers.length} users</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-200">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">User ID</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sync</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loadingUsers ? (
+                  <tr>
+                    <td colSpan="6" className="px-4 py-8 text-center">
+                      <div className="h-8 w-8 border-4 border-[#f47b20] border-t-transparent rounded-full animate-spin mx-auto"></div>
+                    </td>
+                  </tr>
+                ) : branchUsers.length === 0 ? (
+                  <tr>
+                    <td colSpan="6" className="px-4 py-8 text-center text-gray-400">
+                      No users found for this branch. Click "Add User" to create one.
+                    </td>
+                  </tr>
+                ) : (
+                  branchUsers.map((user) => (
+                    <tr key={user.user_id} className="border-b border-gray-50 hover:bg-gray-50 transition">
+                      <td className="px-4 py-3 font-mono text-xs font-medium text-[#1a2a4a]">{user.user_id}</td>
+                      <td className="px-4 py-3 text-[#1a2a4a]">{user.full_name || user.user_name || '-'}</td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          user.role === 'admin' ? 'bg-purple-100 text-purple-700' :
+                          user.role === 'manager' ? 'bg-blue-100 text-blue-700' :
+                          'bg-gray-100 text-gray-700'
+                        }`}>
+                          {user.role || 'cashier'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">{getStatusBadge(user.use_yn)}</td>
+                      <td className="px-4 py-3">{getSyncedBadge(user.synced)}</td>
+                      <td className="px-4 py-3">
+                        {user.synced !== 1 && (
+                          <button
+                            onClick={() => sendUserToKRA(user)}
+                            disabled={!vscuOnline}
+                            className={`text-xs px-2 py-1 rounded ${
+                              vscuOnline
+                                ? 'bg-[#f47b20] hover:bg-[#e06d1a] text-white'
+                                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                            }`}
+                          >
+                            Send to KRA
+                          </button>
+                        )}
+                        {user.synced === 1 && (
+                          <span className="text-xs text-green-600 font-medium">Synced</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'insurance' && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="p-3 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
+            <span className="text-sm font-medium text-gray-700">
+              Insurance for Branch: <span className="text-[#1a2a4a]">{selectedBranchId}</span>
+            </span>
+            <span className="text-xs text-gray-500">{branchInsurance.length} insurance providers</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-200">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Code</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rate (%)</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sync</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loadingInsurance ? (
+                  <tr>
+                    <td colSpan="6" className="px-4 py-8 text-center">
+                      <div className="h-8 w-8 border-4 border-[#f47b20] border-t-transparent rounded-full animate-spin mx-auto"></div>
+                    </td>
+                  </tr>
+                ) : branchInsurance.length === 0 ? (
+                  <tr>
+                    <td colSpan="6" className="px-4 py-8 text-center text-gray-400">
+                      No insurance providers found for this branch. Click "Add Insurance" to create one.
+                    </td>
+                  </tr>
+                ) : (
+                  branchInsurance.map((ins) => (
+                    <tr key={ins.id} className="border-b border-gray-50 hover:bg-gray-50 transition">
+                      <td className="px-4 py-3 font-mono text-xs font-medium text-[#1a2a4a]">{ins.isrcc_cd}</td>
+                      <td className="px-4 py-3 text-[#1a2a4a]">{ins.isrcc_nm}</td>
+                      <td className="px-4 py-3 text-gray-600">{ins.isrc_rt}%</td>
+                      <td className="px-4 py-3">{getStatusBadge(ins.use_yn)}</td>
+                      <td className="px-4 py-3">{getSyncedBadge(ins.synced)}</td>
+                      <td className="px-4 py-3">
+                        {ins.synced !== 1 && (
+                          <button
+                            onClick={() => sendInsuranceToKRA(ins)}
+                            disabled={!vscuOnline}
+                            className={`text-xs px-2 py-1 rounded ${
+                              vscuOnline
+                                ? 'bg-[#f47b20] hover:bg-[#e06d1a] text-white'
+                                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                            }`}
+                          >
+                            Send to KRA
+                          </button>
+                        )}
+                        {ins.synced === 1 && (
+                          <span className="text-xs text-green-600 font-medium">Synced</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {showUserForm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
+            <div className="flex justify-between items-center p-5 border-b">
+              <h2 className="text-lg font-semibold text-[#1a2a4a]">Sync Branch User to KRA</h2>
+              <button
+                onClick={() => setShowUserForm(false)}
+                className="text-gray-400 hover:text-gray-600 text-2xl"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Branch</label>
+                <input
+                  type="text"
+                  value={selectedBranchId}
+                  disabled
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">User ID *</label>
+                <input
+                  type="text"
+                  value={userData.userId}
+                  onChange={(e) => setUserData({ ...userData, userId: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f47b20] focus:border-transparent"
+                  placeholder="e.g., cashier01"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">User Name *</label>
+                <input
+                  type="text"
+                  value={userData.userNm}
+                  onChange={(e) => setUserData({ ...userData, userNm: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f47b20] focus:border-transparent"
+                  placeholder="e.g., John Doe"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Password *</label>
+                <input
+                  type="password"
+                  value={userData.userPwd}
+                  onChange={(e) => setUserData({ ...userData, userPwd: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f47b20] focus:border-transparent"
+                  placeholder="Enter password (min 4 chars)"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <select
+                  value={userData.useYn}
+                  onChange={(e) => setUserData({ ...userData, useYn: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f47b20] focus:border-transparent"
+                >
+                  <option value="Y">Active</option>
+                  <option value="N">Inactive</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 p-5 border-t bg-gray-50 rounded-b-xl">
+              <button
+                onClick={() => setShowUserForm(false)}
+                className="px-5 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 transition font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveBranchUser}
+                disabled={savingUser || !userData.userId || !userData.userNm || !userData.userPwd}
+                className={`px-5 py-2 text-sm bg-[#f47b20] hover:bg-[#e06d1a] text-white rounded-lg transition font-medium flex items-center gap-2 ${
+                  (savingUser || !userData.userId || !userData.userNm || !userData.userPwd) ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
+              >
+                {savingUser ? 'Syncing...' : 'Sync to KRA'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showInsuranceForm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
+            <div className="flex justify-between items-center p-5 border-b">
+              <h2 className="text-lg font-semibold text-[#1a2a4a]">Sync Branch Insurance to KRA</h2>
+              <button
+                onClick={() => setShowInsuranceForm(false)}
+                className="text-gray-400 hover:text-gray-600 text-2xl"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Branch</label>
+                <input
+                  type="text"
+                  value={selectedBranchId}
+                  disabled
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Insurance Code *</label>
+                <input
+                  type="text"
+                  value={insuranceData.isrccCd}
+                  onChange={(e) => setInsuranceData({ ...insuranceData, isrccCd: e.target.value.toUpperCase() })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f47b20] focus:border-transparent"
+                  placeholder="e.g., INS001"
+                  required
+                />
+                <p className="text-xs text-gray-400 mt-1">Unique insurance provider code</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Insurance Name *</label>
+                <input
+                  type="text"
+                  value={insuranceData.isrccNm}
+                  onChange={(e) => setInsuranceData({ ...insuranceData, isrccNm: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f47b20] focus:border-transparent"
+                  placeholder="e.g., NHIF Cover, RSSB Insurance"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Rate (%) *</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={insuranceData.isrccRate}
+                  onChange={(e) => setInsuranceData({ ...insuranceData, isrccRate: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f47b20] focus:border-transparent"
+                  placeholder="e.g., 2.5"
+                  required
+                />
+                <p className="text-xs text-gray-400 mt-1">Insurance contribution rate as percentage (e.g., 2.5 for 2.5%)</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <select
+                  value={insuranceData.useYn}
+                  onChange={(e) => setInsuranceData({ ...insuranceData, useYn: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f47b20] focus:border-transparent"
+                >
+                  <option value="Y">Active</option>
+                  <option value="N">Inactive</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 p-5 border-t bg-gray-50 rounded-b-xl">
+              <button
+                onClick={() => setShowInsuranceForm(false)}
+                className="px-5 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 transition font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveBranchInsurance}
+                disabled={
+                  savingInsurance || 
+                  !insuranceData.isrccCd || 
+                  !insuranceData.isrccNm || 
+                  !insuranceData.isrccRate || 
+                  parseFloat(insuranceData.isrccRate) <= 0
+                }
+                className={`px-5 py-2 text-sm bg-[#f47b20] hover:bg-[#e06d1a] text-white rounded-lg transition font-medium flex items-center gap-2 ${
+                  (savingInsurance || !insuranceData.isrccCd || !insuranceData.isrccNm || !insuranceData.isrccRate || parseFloat(insuranceData.isrccRate) <= 0) 
+                    ? 'opacity-50 cursor-not-allowed' 
+                    : ''
+                }`}
+              >
+                {savingInsurance ? (
+                  <>
+                    <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.418 0V4h-5m5.582 0A9 9 0 1112 3" />
+                    </svg>
+                    Syncing...
+                  </>
+                ) : (
+                  'Sync to KRA'
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

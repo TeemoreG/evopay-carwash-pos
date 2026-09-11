@@ -14,6 +14,7 @@ const Customers = () => {
   const [verifyingPin, setVerifyingPin] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [customerPendingCount, setCustomerPendingCount] = useState(0);
+  const [savingToVSCU, setSavingToVSCU] = useState(false);
   const [formData, setFormData] = useState({
     pin: '',
     name: '',
@@ -86,6 +87,53 @@ const Customers = () => {
     }
   };
 
+  // ============================================
+  // SAVE CUSTOMER BRANCH — Sends to VSCU
+  // ============================================
+  const saveCustomerBranchToVSCU = async (customerData) => {
+    if (!vscuOnline) {
+      toast.warning('VSCU offline — Customer saved locally only.');
+      return false;
+    }
+
+    try {
+      setSavingToVSCU(true);
+      const payload = {
+        tin: import.meta.env.VITE_VSCU_TIN || 'P600004311A',
+        bhfId: import.meta.env.VITE_VSCU_BHF_ID || '00',
+        custNo: customerData.pin || 'CUST-' + Date.now().toString().slice(-6),
+        custTin: customerData.pin,
+        custNm: customerData.name,
+        adrs: customerData.address || null,
+        telNo: customerData.phone || null,
+        email: customerData.email || null,
+        faxNo: null,
+        useYn: customerData.is_active === 0 ? 'N' : 'Y',
+        remark: null,
+        regrNm: 'Admin',
+        regrId: 'Admin',
+        modrNm: 'Admin',
+        modrId: 'Admin'
+      };
+
+      const response = await axiosInstance.post('/api/branches/saveBrancheCustomers', payload);
+      
+      if (response.data?.resultCd === '000' || response.data?.resultCd === '00') {
+        toast.success('✅ Customer synced to VSCU branch');
+        return true;
+      } else {
+        toast.warning(`VSCU: ${response.data?.resultMsg || 'Unknown error'}`);
+        return false;
+      }
+    } catch (error) {
+      console.error('Save customer branch error:', error);
+      toast.error('Failed to sync to VSCU — saved locally');
+      return false;
+    } finally {
+      setSavingToVSCU(false);
+    }
+  };
+
   const handleAdd = () => {
     setEditingCustomer(null);
     setFormData({ pin: '', name: '', phone: '', email: '', address: '', tax_type: 'B', is_active: 1 });
@@ -120,8 +168,13 @@ const Customers = () => {
     }
 
     try {
+      // 1. Save to local DB
       await axiosInstance.post('/api/customers', formData);
       toast.success(editingCustomer ? 'Customer updated successfully' : 'Customer added successfully');
+
+      // 2. Sync to VSCU Branch
+      await saveCustomerBranchToVSCU(formData);
+
       setShowForm(false);
       fetchCustomers();
     } catch (error) {
@@ -215,6 +268,9 @@ const Customers = () => {
         </span>
         {!vscuOnline && (
           <span className="text-xs text-yellow-600 ml-auto">(PIN verification unavailable)</span>
+        )}
+        {savingToVSCU && (
+          <span className="text-xs text-blue-600 ml-auto animate-pulse">Syncing to VSCU...</span>
         )}
       </div>
 
@@ -355,9 +411,10 @@ const Customers = () => {
             <div className="flex gap-3 mt-4">
               <button
                 type="submit"
-                className="bg-[#f47b20] hover:bg-[#e06d1a] text-white px-6 py-2 rounded-lg transition"
+                disabled={savingToVSCU}
+                className="bg-[#f47b20] hover:bg-[#e06d1a] text-white px-6 py-2 rounded-lg transition disabled:opacity-50"
               >
-                {editingCustomer ? 'Update' : 'Save'}
+                {savingToVSCU ? 'Syncing...' : (editingCustomer ? 'Update' : 'Save')}
               </button>
               <button
                 type="button"

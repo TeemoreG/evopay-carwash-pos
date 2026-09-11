@@ -16,14 +16,14 @@ import {
 } from '../api/vscuApi';
 import { useAuth } from '../context/AuthContext';
 
-// Helper to map item to VSCU payload format
-const mapItemToVSCUPayload = (item) => {
+// Helper to map service to VSCU payload format (KRA compliant)
+const mapServiceToVSCUPayload = (item) => {
   return {
-    tin: item.tin || '',
-    bhfId: item.bhfId || '00',
+    tin: item.tin || import.meta.env.VITE_VSCU_TIN,
+    bhfId: item.bhfId || import.meta.env.VITE_VSCU_BHF_ID,
     itemCd: item.itemCd || item.item_cd,
     itemClsCd: item.itemClsCd || item.item_cls_cd || '5059690809',
-    itemTyCd: item.itemTyCd || '1',
+    itemTyCd: item.itemTyCd || '2',
     itemNm: item.itemNm || item.item_name,
     itemStdNm: item.itemStdNm || null,
     orgnNatCd: item.orgnNatCd || item.orgn_nat_cd || 'KE',
@@ -39,7 +39,7 @@ const mapItemToVSCUPayload = (item) => {
     grpPrcL4: item.grpPrcL4 || item.price || 0,
     grpPrcL5: item.grpPrcL5 || null,
     addInfo: item.addInfo || null,
-    sftyQty: item.sftyQty || item.sfty_qty || 5,
+    sftyQty: item.sftyQty || item.sfty_qty || 0,
     isrcAplcbYn: item.isrcAplcbYn || 'N',
     useYn: item.useYn || item.use_yn || 'Y',
     regrNm: item.regrNm || 'Admin',
@@ -48,6 +48,16 @@ const mapItemToVSCUPayload = (item) => {
     modrId: item.modrId || 'Admin'
   };
 };
+
+// Service Categories
+const SERVICE_CATEGORIES = [
+  { id: 'basic', name: 'Basic Wash', color: 'bg-blue-100 text-blue-700',},
+  { id: 'standard', name: 'Standard Wash', color: 'bg-green-100 text-green-700', },
+  { id: 'premium', name: 'Premium Wash', color: 'bg-purple-100 text-purple-700', },
+  { id: 'vip', name: 'VIP Wash', color: 'bg-amber-100 text-amber-700',},
+  { id: 'interior', name: 'Interior', color: 'bg-cyan-100 text-cyan-700',},
+  { id: 'addon', name: 'Add-ons', color: 'bg-gray-100 text-gray-700',},
+];
 
 // Bulk Import Modal
 const BulkImportModal = ({ isOpen, onClose, onImport }) => {
@@ -108,7 +118,7 @@ const BulkImportModal = ({ isOpen, onClose, onImport }) => {
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col">
         <div className="flex justify-between items-center p-5 border-b">
-          <h2 className="text-lg font-semibold text-[#1a2a4a]">Bulk Import Items</h2>
+          <h2 className="text-lg font-semibold text-[#1a2a4a]">Bulk Import Services</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl">×</button>
         </div>
 
@@ -130,7 +140,7 @@ const BulkImportModal = ({ isOpen, onClose, onImport }) => {
 
           {csvData.length > 0 && (
             <div>
-              <p className="text-sm font-medium text-gray-700 mb-2">{csvData.length} items ready</p>
+              <p className="text-sm font-medium text-gray-700 mb-2">{csvData.length} services ready</p>
               <div className="overflow-x-auto max-h-48 border rounded-lg">
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50">
@@ -180,331 +190,8 @@ const BulkImportModal = ({ isOpen, onClose, onImport }) => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
               </svg>
             )}
-            {isLoading ? 'Importing...' : `Import ${csvData.length} Items`}
+            {isLoading ? 'Importing...' : `Import ${csvData.length} Services`}
           </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Item Composition Modal
-const ItemCompositionModal = ({ isOpen, onClose, onSend, selectedItem, items }) => {
-  const [compositionItems, setCompositionItems] = useState([]);
-  const [newComposition, setNewComposition] = useState({ cpstItemCd: '', cpstQty: 1 });
-  const [isLoading, setIsLoading] = useState(false);
-  const [existingCompositions, setExistingCompositions] = useState([]);
-  const [isLoadingExisting, setIsLoadingExisting] = useState(false);
-
-  // Get component name from item code
-  const getComponentName = (itemCd) => {
-    const found = items?.find(i => i.itemCd === itemCd || i.item_cd === itemCd);
-    return found?.itemNm || found?.item_name || itemCd;
-  };
-
-  // Get available items for dropdown (exclude parent and already added)
-  const availableComponents = items?.filter(i => {
-    const code = i.itemCd || i.item_cd;
-    const alreadyAdded = compositionItems.some(c => c.cpstItemCd === code);
-    const alreadyExisting = existingCompositions.some(c => c.cpstItemCd === code);
-    return code !== selectedItem?.itemCd && 
-           code !== selectedItem?.item_cd && 
-           !alreadyAdded && 
-           !alreadyExisting;
-  }) || [];
-
-  // Fetch existing compositions when modal opens
-  useEffect(() => {
-    if (isOpen && selectedItem) {
-      fetchExistingCompositions();
-    }
-  }, [isOpen, selectedItem]);
-
-  const fetchExistingCompositions = async () => {
-    setIsLoadingExisting(true);
-    try {
-      const itemCd = selectedItem?.itemCd || selectedItem?.item_cd;
-      const response = await fetch(`/api/items/${itemCd}/compositions`);
-      const data = await response.json();
-      if (data.success) {
-        setExistingCompositions(data.data || []);
-      }
-    } catch (error) {
-      console.error('Failed to fetch compositions:', error);
-    } finally {
-      setIsLoadingExisting(false);
-    }
-  };
-
-  const addComposition = () => {
-    if (!newComposition.cpstItemCd || !newComposition.cpstQty) {
-      toast.warning('Enter component code and quantity');
-      return;
-    }
-    if (parseInt(newComposition.cpstQty) < 1) {
-      toast.warning('Quantity must be at least 1');
-      return;
-    }
-    const name = getComponentName(newComposition.cpstItemCd);
-    setCompositionItems([...compositionItems, { 
-      ...newComposition, 
-      cpstItemNm: name 
-    }]);
-    setNewComposition({ cpstItemCd: '', cpstQty: 1 });
-  };
-
-  const removeComposition = (index) => {
-    setCompositionItems(compositionItems.filter((_, i) => i !== index));
-  };
-
-  const removeExistingComposition = async (cpstItemCd) => {
-    if (!confirm(`Remove component ${cpstItemCd} from this composition?`)) return;
-    
-    try {
-      const itemCd = selectedItem?.itemCd || selectedItem?.item_cd;
-      const response = await fetch(`/api/items/${itemCd}/compositions/${cpstItemCd}`, {
-        method: 'DELETE'
-      });
-      const data = await response.json();
-      if (data.success) {
-        toast.success('Component removed');
-        setExistingCompositions(existingCompositions.filter(c => c.cpstItemCd !== cpstItemCd));
-      } else {
-        toast.error(data.message || 'Failed to remove');
-      }
-    } catch (error) {
-      toast.error('Error removing component');
-    }
-  };
-
-  const handleSend = async () => {
-    if (compositionItems.length === 0 && existingCompositions.length === 0) {
-      toast.warning('Add at least one component');
-      return;
-    }
-
-    // Check if parent exists in VSCU
-    const parentCode = selectedItem?.itemCd || selectedItem?.item_cd;
-    const parentSynced = items?.find(i => (i.itemCd === parentCode || i.item_cd === parentCode))?.synced === 1;
-    
-    if (!parentSynced) {
-      toast.error(`Parent item ${parentCode} must be synced to VSCU first`);
-      return;
-    }
-
-    // Check if all components exist in VSCU
-    const unsyncedComponents = compositionItems.filter(comp => {
-      const item = items?.find(i => i.itemCd === comp.cpstItemCd || i.item_cd === comp.cpstItemCd);
-      return item?.synced !== 1;
-    });
-
-    if (unsyncedComponents.length > 0) {
-      const unsyncedNames = unsyncedComponents.map(c => c.cpstItemCd).join(', ');
-      toast.error(`Components must be synced first: ${unsyncedNames}`);
-      return;
-    }
-
-    setIsLoading(true);
-    let success = 0;
-    let failed = 0;
-
-    // Send each new composition
-    for (const comp of compositionItems) {
-      const payload = {
-        tin: selectedItem?.tin || '',
-        bhfId: selectedItem?.bhfId || '00',
-        itemCd: parentCode,
-        cpstItemCd: comp.cpstItemCd,
-        cpstQty: parseInt(comp.cpstQty),
-        regrId: 'Admin',
-        regrNm: 'Admin'
-      };
-      try {
-        await onSend(payload);
-        success++;
-      } catch {
-        failed++;
-      }
-    }
-    
-    setIsLoading(false);
-    if (success > 0) {
-      toast.success(`✅ Sent ${success} compositions${failed > 0 ? `, ${failed} failed` : ''}`);
-    }
-    onClose();
-    setCompositionItems([]);
-    setExistingCompositions([]);
-  };
-
-  if (!isOpen) return null;
-
-  const totalComponents = compositionItems.length + existingCompositions.length;
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] flex flex-col">
-        <div className="flex justify-between items-center p-5 border-b">
-          <h2 className="text-lg font-semibold text-[#1a2a4a]">Item Composition</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl">×</button>
-        </div>
-
-        <div className="p-5 overflow-y-auto flex-1">
-          <p className="text-sm text-gray-600 mb-4">
-            Parent Item: <span className="font-medium text-[#1a2a4a]">
-              {selectedItem?.itemNm || selectedItem?.item_name || 'Unknown'}
-            </span>
-            <span className="text-xs text-gray-400 ml-2">
-              ({selectedItem?.itemCd || selectedItem?.item_cd})
-            </span>
-            <span className={`ml-2 text-xs px-2 py-0.5 rounded ${
-              items?.find(i => (i.itemCd === selectedItem?.itemCd || i.item_cd === selectedItem?.item_cd))?.synced === 1
-                ? 'bg-green-100 text-green-700'
-                : 'bg-yellow-100 text-yellow-700'
-            }`}>
-              {items?.find(i => (i.itemCd === selectedItem?.itemCd || i.item_cd === selectedItem?.item_cd))?.synced === 1
-                ? '✓ Synced'
-                : '⚠️ Not Synced'}
-            </span>
-          </p>
-
-          {/* Existing Compositions */}
-          {isLoadingExisting ? (
-            <p className="text-sm text-gray-400">Loading existing compositions...</p>
-          ) : existingCompositions.length > 0 && (
-            <div className="mb-4">
-              <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Existing Components</p>
-              <div className="border rounded-lg divide-y bg-gray-50">
-                {existingCompositions.map((comp, idx) => (
-                  <div key={`existing-${idx}`} className="flex justify-between items-center p-3 hover:bg-gray-100">
-                    <div>
-                      <span className="text-sm font-medium text-[#1a2a4a]">
-                        {getComponentName(comp.cpstItemCd)}
-                      </span>
-                      <span className="text-xs text-gray-400 ml-2">
-                        ({comp.cpstItemCd})
-                      </span>
-                      <span className="text-sm text-gray-500 ml-3">Qty: {comp.cpstQty}</span>
-                      {comp.synced === 1 && (
-                        <span className="ml-2 text-xs text-green-600">✓ VSCU</span>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => removeExistingComposition(comp.cpstItemCd)}
-                      className="text-red-500 hover:text-red-700 text-sm font-medium"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Add New Composition */}
-          <div className="flex gap-2 mb-4">
-            <div className="flex-1">
-              <select
-                value={newComposition.cpstItemCd}
-                onChange={(e) => {
-                  const code = e.target.value;
-                  const name = getComponentName(code);
-                  setNewComposition({ ...newComposition, cpstItemCd: code, cpstItemNm: name });
-                }}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-[#f47b20]"
-              >
-                <option value="">Select component...</option>
-                {availableComponents.map((item) => {
-                  const code = item.itemCd || item.item_cd;
-                  const name = item.itemNm || item.item_name;
-                  const isSynced = item.synced === 1;
-                  return (
-                    <option key={code} value={code}>
-                      {code} - {name} {!isSynced ? '(⚠️ Not Synced)' : ''}
-                    </option>
-                  );
-                })}
-              </select>
-            </div>
-            <input
-              type="number"
-              placeholder="Qty"
-              value={newComposition.cpstQty}
-              onChange={(e) => setNewComposition({ ...newComposition, cpstQty: e.target.value })}
-              className="w-20 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-[#f47b20]"
-              min="1"
-            />
-            <button
-              onClick={addComposition}
-              disabled={!newComposition.cpstItemCd}
-              className="px-4 py-2 bg-[#1a2a4a] text-white rounded-lg text-sm hover:bg-[#0f1a33] disabled:opacity-50 whitespace-nowrap"
-            >
-              Add
-            </button>
-          </div>
-
-          {/* New Compositions List */}
-          {compositionItems.length > 0 && (
-            <div className="mb-4">
-              <p className="text-xs font-semibold text-gray-500 uppercase mb-2">New Components</p>
-              <div className="border rounded-lg divide-y">
-                {compositionItems.map((comp, idx) => (
-                  <div key={`new-${idx}`} className="flex justify-between items-center p-3 hover:bg-gray-50">
-                    <div>
-                      <span className="text-sm font-medium text-[#1a2a4a]">
-                        {comp.cpstItemNm || comp.cpstItemCd}
-                      </span>
-                      <span className="text-xs text-gray-400 ml-2">
-                        ({comp.cpstItemCd})
-                      </span>
-                      <span className="text-sm text-gray-500 ml-3">Qty: {comp.cpstQty}</span>
-                      <span className="ml-2 text-xs text-blue-600">Pending</span>
-                    </div>
-                    <button
-                      onClick={() => removeComposition(idx)}
-                      className="text-red-500 hover:text-red-700 text-sm"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {totalComponents === 0 && (
-            <p className="text-sm text-gray-400 text-center py-4">
-              No components added yet. Select a component above.
-            </p>
-          )}
-
-          <div className="flex gap-3 mt-4 pt-4 border-t">
-            <button
-              onClick={onClose}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSend}
-              disabled={compositionItems.length === 0 || isLoading}
-              className={`flex-1 px-4 py-2 rounded-lg transition font-medium ${
-                compositionItems.length === 0 || isLoading
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  : 'bg-[#f47b20] hover:bg-[#e06d1a] text-white'
-              }`}
-            >
-              {isLoading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.418 0V4h-5m5.582 0A9 9 0 1112 3" />
-                  </svg>
-                  Sending...
-                </span>
-              ) : (
-                `Send ${compositionItems.length} New Component${compositionItems.length !== 1 ? 's' : ''}`
-              )}
-            </button>
-          </div>
         </div>
       </div>
     </div>
@@ -518,20 +205,16 @@ const Items = () => {
   const [showForm, setShowForm] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [taxFilter, setTaxFilter] = useState('all');
   const [lastUpdated, setLastUpdated] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [showBulkImport, setShowBulkImport] = useState(false);
-  const [syncFilter, setSyncFilter] = useState('all');
   const [vscuOnline, setVscuOnline] = useState(false);
-  const [showComposition, setShowComposition] = useState(false);
-  const [compositionItem, setCompositionItem] = useState(null);
   const [lastSyncDate, setLastSyncDate] = useState('');
   const [saving, setSaving] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState('all');
 
   const barcodeInputRef = useRef(null);
 
-  // Check VSCU status
   const checkVSCU = async () => {
     try {
       const response = await checkVSCUStatus();
@@ -549,7 +232,6 @@ const Items = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Barcode scanner support
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Enter' && barcodeInputRef.current) {
@@ -596,331 +278,299 @@ const Items = () => {
         setLastSyncDate(date.toLocaleString());
       }
     } catch (error) {
-      console.error('Failed to fetch items:', error);
-      toast.error('Failed to load items');
+      console.error('Failed to fetch services:', error);
+      toast.error('Failed to load services');
       setItems([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // VSCU: Get Item Information with lastReqDt tracking
-const syncItemsFromVSCU = async () => {
-  if (!vscuOnline) {
-    toast.error('VSCU is offline. Please start VSCU first.');
-    return;
-  }
+  const syncItemsFromVSCU = async () => {
+    if (!vscuOnline) {
+      toast.error('VSCU is offline. Please start VSCU first.');
+      return;
+    }
 
-  setSyncing(true);
-  try {
-    const settingsRes = await getSettings();
-    const lastSync = settingsRes.data?.items_last_sync || '20200101000000';
-    
-    const payload = {
-      tin: user?.tin || '',
-      bhfId: user?.bhfId || '00',
-      lastReqDt: lastSync
-    };
-
-    const response = await getItemInfo(payload);
-    
-    if (response.data && response.data.items) {
-      const vscuItems = response.data.items;
+    setSyncing(true);
+    try {
+      const settingsRes = await getSettings();
+      const lastSync = settingsRes.data?.items_last_sync || '20200101000000';
       
-      for (const item of vscuItems) {
-        await saveItem(item);
+      const payload = {
+        tin: import.meta.env.VITE_VSCU_TIN,
+        bhfId: import.meta.env.VITE_VSCU_BHF_ID,
+        lastReqDt: lastSync
+      };
+
+      const response = await getItemInfo(payload);
+      
+      if (response.data?.resultCd === '000' && response.data?.data?.itemList) {
+        const vscuItems = response.data.data.itemList;
+        
+        for (const item of vscuItems) {
+          await saveItem(item);
+        }
+        
+        const now = new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 14);
+        await updateSettings({ items_last_sync: now });
+        
+        await fetchItems();
+        toast.success(`Synced ${vscuItems.length} items from VSCU`);
+      } else {
+        toast.info('No new items from VSCU');
       }
+    } catch (error) {
+      console.error('VSCU sync failed:', error);
+      toast.error('Failed to sync from VSCU');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handleSendItemToVSCU = async (item) => {
+    if (!item || !item.itemCd || !item.itemCd.trim()) return;
+    if (!item.itemNm || !item.itemNm.trim()) return;
+    
+    if (!vscuOnline) {
+      toast.info('VSCU offline. Service will be queued for sync.');
+      return;
+    }
+
+    try {
+      const payload = mapServiceToVSCUPayload({
+        ...item,
+        tin: import.meta.env.VITE_VSCU_TIN,
+        bhfId: import.meta.env.VITE_VSCU_BHF_ID
+      });
+
+      await sendItem(payload);
+      toast.success(`Service ${item.itemCd} sent to VSCU`);
       
-      const now = new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 14);
-      await updateSettings({ items_last_sync: now });
+      await saveItem({ ...item, synced: 1 });
+      await fetchItems();
+    } catch (error) {
+      console.error('Send service to VSCU failed:', error);
+      toast.warning(`Service ${item.itemCd} saved locally but VSCU sync failed.`);
+      await saveItem({ ...item, synced: 0 });
+      throw error;
+    }
+  };
+
+  const handleSendComposition = async (payload) => {
+    if (!vscuOnline) {
+      toast.error('VSCU is offline. Please start VSCU first.');
+      return;
+    }
+
+    try {
+      const fixedPayload = {
+        ...payload,
+        tin: import.meta.env.VITE_VSCU_TIN || '',
+        bhfId: import.meta.env.VITE_VSCU_BHF_ID || '00'
+      };
+      await sendItemComposition(fixedPayload);
+      toast.success(`Composition sent for ${payload.itemCd}`);
+    } catch (error) {
+      console.error('Send composition failed:', error);
+      toast.error('Failed to send composition');
+    }
+  };
+
+  const handleAddItem = async (newItem) => {
+    if (!newItem.itemCd || !newItem.itemCd.trim()) {
+      toast.error('Service Code is required');
+      return;
+    }
+    
+    if (!newItem.itemNm || !newItem.itemNm.trim()) {
+      toast.error('Service Name is required');
+      return;
+    }
+
+    const existingItem = items.find(item => 
+      item.itemCd === newItem.itemCd || item.item_cd === newItem.itemCd
+    );
+    if (existingItem) {
+      toast.error(`Service code "${newItem.itemCd}" already exists!`);
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const serviceData = {
+        ...newItem,
+        item_type: 'service',
+        itemTyCd: '2'
+      };
+      
+      const response = await saveItem(serviceData);
+      const savedItem = response.data || serviceData;
+      const serviceName = savedItem.itemNm || savedItem.item_name || savedItem.itemCd || savedItem.item_cd || 'Service';
+      
+      setItems(prev => [...prev, savedItem]);
+      setShowForm(false);
+      setLastUpdated(new Date().toLocaleString());
+      
+      if (vscuOnline) {
+        try {
+          await handleSendItemToVSCU(savedItem);
+          toast.success(`"${serviceName}" saved and synced to KRA`);
+        } catch (syncError) {
+          toast.warning(`"${serviceName}" saved but VSCU sync failed.`);
+        }
+      } else {
+        toast.info(`"${serviceName}" saved locally. Will sync when VSCU is online.`);
+      }
       
       await fetchItems();
-      toast.success(`Synced ${vscuItems.length} items from VSCU`);
-    } else {
-      toast.info('No new items from VSCU');
+    } catch (error) {
+      console.error('Failed to add service:', error);
+      toast.error('Error saving service. Please try again.');
+    } finally {
+      setSaving(false);
     }
-  } catch (error) {
-    console.error('VSCU sync failed:', error);
-    toast.error('Failed to sync from VSCU');
-  } finally {
-    setSyncing(false);
-  }
-};
+  };
 
-// VSCU: Send Item Information
-const handleSendItemToVSCU = async (item) => {
-  if (!item || !item.itemCd || !item.itemCd.trim()) {
-    console.warn('Skipping VSCU sync - item missing itemCd:', item);
-    return;
-  }
-  
-  if (!item.itemNm || !item.itemNm.trim()) {
-    console.warn('Skipping VSCU sync - item missing itemNm:', item);
-    return;
-  }
-  
-  if (!vscuOnline) {
-    toast.info('VSCU offline. Item will be queued for sync.');
-    return;
-  }
-
-  try {
-    const payload = mapItemToVSCUPayload({
-      ...item,
-      tin: user?.tin || '',
-      bhfId: user?.bhfId || '00'
-    });
-
-    await sendItem(payload);
-    toast.success(`Item ${item.itemCd} sent to VSCU`);
-    
-    await saveItem({ ...item, synced: 1 });
-    await fetchItems();
-  } catch (error) {
-    console.error('Send item to VSCU failed:', error);
-    toast.warning(`Item ${item.itemCd} saved locally but VSCU sync failed. Will retry later.`);
-    await saveItem({ ...item, synced: 0 });
-    throw error;
-  }
-};
-
-// VSCU: Send Item Composition
-const handleSendComposition = async (payload) => {
-  if (!vscuOnline) {
-    toast.error('VSCU is offline. Please start VSCU first.');
-    return;
-  }
-
-  try {
-    const fixedPayload = {
-      ...payload,
-      tin: user?.tin || import.meta.env.VITE_VSCU_TIN || '',
-      bhfId: user?.bhfId || import.meta.env.VITE_VSCU_BHF_ID || '00'
-    };
-    await sendItemComposition(fixedPayload);
-    toast.success(`Composition sent for ${payload.itemCd}`);
-  } catch (error) {
-    console.error('Send composition failed:', error);
-    toast.error('Failed to send composition');
-  }
-};
-
-const handleAddItem = async (newItem) => {
-  if (!newItem.itemCd || !newItem.itemCd.trim()) {
-    toast.error('Item Code is required');
-    return;
-  }
-  
-  if (!newItem.itemNm || !newItem.itemNm.trim()) {
-    toast.error('Item Name is required');
-    return;
-  }
-
-  // Check for duplicate item code
-  const existingItem = items.find(item => 
-    item.itemCd === newItem.itemCd || item.item_cd === newItem.itemCd
-  );
-  if (existingItem) {
-    toast.error(`Item code "${newItem.itemCd}" already exists!`);
-    return;
-  }
-
-  setSaving(true);
-  try {
-    const response = await saveItem(newItem);
-    const savedItem = response.data || newItem;
-    const itemName = savedItem.itemNm || savedItem.item_name || savedItem.itemCd || savedItem.item_cd || 'Item';
-    
-    // Update state immediately
-    setItems(prev => [...prev, savedItem]);
-    setShowForm(false);
-    setLastUpdated(new Date().toLocaleString());
-    
-    if (vscuOnline) {
-      try {
-        await handleSendItemToVSCU(savedItem);
-        toast.success(`"${itemName}" saved and synced to KRA`);
-      } catch (syncError) {
-        toast.warning(`"${itemName}" saved but VSCU sync failed. Will retry later.`);
-      }
-    } else {
-      toast.info(`"${itemName}" saved locally. Will sync when VSCU is online.`);
+  const handleEditItem = async (updatedItem) => {
+    if (!updatedItem.itemCd || !updatedItem.itemCd.trim()) {
+      toast.error('Service Code is required');
+      return;
     }
     
-    await fetchItems();
-  } catch (error) {
-    console.error('Failed to add item:', error);
-    toast.error('Error saving item. Please try again.');
-  } finally {
-    setSaving(false);
-  }
-};
-
-const handleEditItem = async (updatedItem) => {
-  if (!updatedItem.itemCd || !updatedItem.itemCd.trim()) {
-    toast.error('Item Code is required');
-    return;
-  }
-  
-  if (!updatedItem.itemNm || !updatedItem.itemNm.trim()) {
-    toast.error('Item Name is required');
-    return;
-  }
-
-  setSaving(true);
-  try {
-    await saveItem(updatedItem);
-    const itemName = updatedItem.itemNm || updatedItem.item_name || updatedItem.itemCd || updatedItem.item_cd || 'Item';
-    
-    // Update state immediately
-    setItems(prev => prev.map(item => 
-      (item.itemCd === updatedItem.itemCd || item.item_cd === updatedItem.itemCd) ? updatedItem : item
-    ));
-    setSelectedItem(null);
-    setLastUpdated(new Date().toLocaleString());
-    
-    if (vscuOnline) {
-      try {
-        await handleSendItemToVSCU(updatedItem);
-        toast.success(`"${itemName}" updated and synced to KRA`);
-      } catch (syncError) {
-        toast.warning(`"${itemName}" updated but VSCU sync failed. Will retry later.`);
-      }
-    } else {
-      toast.info(`"${itemName}" updated locally. Will sync when VSCU is online.`);
+    if (!updatedItem.itemNm || !updatedItem.itemNm.trim()) {
+      toast.error('Service Name is required');
+      return;
     }
-    
-    await fetchItems();
-  } catch (error) {
-    console.error('Failed to update item:', error);
-    toast.error('Error updating item. Please try again.');
-  } finally {
-    setSaving(false);
-  }
-};
 
-const handleDeleteItem = async (itemCd) => {
-  if (!window.confirm('Delete this item?')) return;
-  try {
-    await deleteItem(itemCd);
-    setItems(prev => prev.filter(item => 
-      item.itemCd !== itemCd && item.item_cd !== itemCd
-    ));
-    setLastUpdated(new Date().toLocaleString());
-    toast.success('Item deleted');
-  } catch (error) {
-    console.error('Failed to delete item:', error);
-    toast.error('Error deleting item');
-  }
-};
-
-const handleBulkSync = async () => {
-  const unsynced = items.filter(item => item.synced === 0);
-  if (unsynced.length === 0) {
-    toast.info('All items are synced');
-    return;
-  }
-  
-  if (!vscuOnline) {
-    toast.error('VSCU is offline. Please start VSCU first.');
-    return;
-  }
-
-  if (!confirm(`Sync ${unsynced.length} items to VSCU?`)) return;
-  
-  setSyncing(true);
-  let success = 0, failed = 0;
-
-  for (const item of unsynced) {
+    setSaving(true);
     try {
-      await handleSendItemToVSCU(item);
-      success++;
-    } catch {
-      failed++;
+      const serviceData = {
+        ...updatedItem,
+        item_type: 'service',
+        itemTyCd: '2'
+      };
+      
+      await saveItem(serviceData);
+      const serviceName = serviceData.itemNm || serviceData.item_name || serviceData.itemCd || serviceData.item_cd || 'Service';
+      
+      setItems(prev => prev.map(item => 
+        (item.itemCd === serviceData.itemCd || item.item_cd === serviceData.itemCd) ? serviceData : item
+      ));
+      setSelectedItem(null);
+      setLastUpdated(new Date().toLocaleString());
+      
+      if (vscuOnline) {
+        try {
+          await handleSendItemToVSCU(serviceData);
+          toast.success(`"${serviceName}" updated and synced to KRA`);
+        } catch (syncError) {
+          toast.warning(`"${serviceName}" updated but VSCU sync failed.`);
+        }
+      } else {
+        toast.info(`"${serviceName}" updated locally. Will sync when VSCU is online.`);
+      }
+      
+      await fetchItems();
+    } catch (error) {
+      console.error('Failed to update service:', error);
+      toast.error('Error updating service. Please try again.');
+    } finally {
+      setSaving(false);
     }
-  }
-  
-  await fetchItems();
-  toast.success(`Synced ${success} items, ${failed} failed`);
-  setSyncing(false);
-};
+  };
 
-const handleBulkImport = async (importedData) => {
-  try {
-    await bulkImportItems(importedData);
-    await fetchItems();
-    toast.success(`Imported ${importedData.length} items`);
+  const handleDeleteItem = async (itemCd) => {
+    if (!window.confirm('Delete this service?')) return;
+    try {
+      await deleteItem(itemCd);
+      setItems(prev => prev.filter(item => 
+        item.itemCd !== itemCd && item.item_cd !== itemCd
+      ));
+      setLastUpdated(new Date().toLocaleString());
+      toast.success('Service deleted');
+    } catch (error) {
+      console.error('Failed to delete service:', error);
+      toast.error('Error deleting service');
+    }
+  };
+
+  const handleBulkSync = async () => {
+    const unsynced = items.filter(item => item.synced === 0);
+    if (unsynced.length === 0) {
+      toast.info('All services are synced');
+      return;
+    }
     
-    if (vscuOnline) {
-      const newItems = items.filter(i => i.synced === 0);
-      if (newItems.length > 0) {
-        await handleBulkSync();
+    if (!vscuOnline) {
+      toast.error('VSCU is offline. Please start VSCU first.');
+      return;
+    }
+
+    if (!confirm(`Sync ${unsynced.length} services to VSCU?`)) return;
+    
+    setSyncing(true);
+    let success = 0, failed = 0;
+
+    for (const item of unsynced) {
+      try {
+        await handleSendItemToVSCU(item);
+        success++;
+      } catch {
+        failed++;
       }
     }
-  } catch (error) {
-    console.error('Bulk import failed:', error);
-    toast.error('Import failed');
-  }
-};
+    
+    await fetchItems();
+    toast.success(`Synced ${success} services, ${failed} failed`);
+    setSyncing(false);
+  };
 
-const resetLastSync = async () => {
-  if (!confirm('Reset last sync date to fetch ALL items from VSCU?')) return;
-  try {
-    await updateSettings({ items_last_sync: '20200101000000' });
-    toast.info('Last sync reset. Fetching all items...');
-    await syncItemsFromVSCU();
-  } catch (error) {
-    toast.error('Reset failed');
-  }
-};
+  const handleBulkImport = async (importedData) => {
+    try {
+      await bulkImportItems(importedData);
+      await fetchItems();
+      toast.success(`Imported ${importedData.length} services`);
+      
+      if (vscuOnline) {
+        const newItems = items.filter(i => i.synced === 0);
+        if (newItems.length > 0) {
+          await handleBulkSync();
+        }
+      }
+    } catch (error) {
+      console.error('Bulk import failed:', error);
+      toast.error('Import failed');
+    }
+  };
 
-const getFilteredItems = () => {
-  let filtered = items;
-  if (searchTerm) {
-    const term = searchTerm.toLowerCase();
-    filtered = filtered.filter(item =>
-      (item.item_name || item.itemNm || '').toLowerCase().includes(term) ||
-      (item.item_cd || item.itemCd || '').toLowerCase().includes(term) ||
-      (item.item_cls_cd || item.itemClsCd || '').includes(searchTerm)
-    );
-  }
-  if (taxFilter !== 'all') {
-    filtered = filtered.filter(item => 
-      (item.tax_type || item.taxTyCd) === taxFilter
-    );
-  }
-  if (syncFilter !== 'all') {
-    filtered = filtered.filter(item => 
-      syncFilter === 'synced' ? item.synced === 1 : item.synced === 0
-    );
-  }
-  return filtered;
-};
+  const getFilteredItems = () => {
+    let filtered = items;
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(item =>
+        (item.item_name || item.itemNm || '').toLowerCase().includes(term) ||
+        (item.item_cd || item.itemCd || '').toLowerCase().includes(term)
+      );
+    }
+    if (categoryFilter !== 'all') {
+      filtered = filtered.filter(item => (item.category || 'addon') === categoryFilter);
+    }
+    return filtered;
+  };
 
-const filteredItems = getFilteredItems();
+  const filteredItems = getFilteredItems();
 
-const totalValue = items.reduce((sum, item) => {
-  const price = item.dftPrc || item.price || 0;
-  const stock = item.sftyQty || item.stock || 0;
-  return sum + (price * stock);
-}, 0);
+  const stats = {
+    total: items.length,
+    avgPrice: items.length > 0 
+      ? items.reduce((sum, i) => sum + Number(i.price || i.dftPrc || 0), 0) / items.length 
+      : 0,
+    synced: items.filter(i => i.synced === 1).length,
+    local: items.filter(i => i.synced === 0).length,
+    active: items.filter(i => (i.use_yn || i.useYn || 'Y') === 'Y').length,
+  };
 
-const stats = {
-  total: items.length,
-  lowStock: items.filter(i => {
-    const stock = i.stock || 0;
-    const safety = i.sftyQty || 5;
-    return stock > 0 && stock <= safety;
-  }).length,
-  outOfStock: items.filter(i => (i.stock || 0) === 0).length,
-  totalValue: items.reduce((sum, i) => {
-    const price = i.dftPrc || i.price || 0;
-    const stock = i.stock || 0;
-    return sum + (price * stock);
-  }, 0),
-  synced: items.filter(i => i.synced === 1).length,
-  local: items.filter(i => i.synced === 0).length,
-};
   return (
     <div>
       <input ref={barcodeInputRef} type="text" className="hidden" aria-hidden="true" />
@@ -931,62 +581,69 @@ const stats = {
         onImport={handleBulkImport}
       />
 
-      <ItemCompositionModal
-        isOpen={showComposition}
-        onClose={() => { setShowComposition(false); setCompositionItem(null); }}
-        onSend={handleSendComposition}
-        selectedItem={compositionItem}
-        items={items}
-      />
-
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[#1a2a4a]">
-          {selectedItem ? 'Edit Item' : 'Item Management'}
-        </h1>
-        <p className="text-gray-500 text-sm mt-0.5">
-          {selectedItem ? `Editing ${selectedItem.itemNm || selectedItem.item_name}` : 'Manage inventory with VSCU integration'}
-        </p>
-      </div>
-
-      {/* VSCU Status - Clean and small */}
-      <div className="flex flex-wrap items-center gap-4 mb-4 bg-white px-3 py-2 rounded-lg shadow-sm border border-gray-200 text-sm">
-        <div className="flex items-center gap-2">
-          <span className={`inline-block w-2 h-2 rounded-full ${vscuOnline ? 'bg-green-500' : 'bg-red-500'}`}></span>
-          <span className="text-gray-600">
-            VSCU: <span className={`font-medium ${vscuOnline ? 'text-green-600' : 'text-red-600'}`}>
-              {vscuOnline ? 'Online' : 'Offline'}
-            </span>
-          </span>
+      {/* Header */}
+      <div className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-[#1a2a4a]">
+            {selectedItem ? 'Edit Service' : 'Service Management'}
+          </h1>
+          <p className="text-gray-500 text-sm mt-0.5">
+            {selectedItem 
+              ? `Editing ${selectedItem.item_name || selectedItem.itemNm}` 
+              : 'Manage car wash services with KRA eTIMS integration'}
+          </p>
         </div>
-        {lastSyncDate && (
-          <>
-            <span className="text-gray-300">|</span>
-            <span className="text-xs text-gray-400">Last sync: {lastSyncDate}</span>
-          </>
-        )}
-        {!vscuOnline && stats.local > 0 && (
-          <span className="text-xs text-amber-600"> {stats.local} items pending sync</span>
-        )}
+        
+        {/* VSCU Status */}
+        <div className="flex items-center gap-3 bg-white px-3 py-2 rounded-lg shadow-sm border border-gray-200">
+          <div className="flex items-center gap-2">
+            <span className={`inline-block w-2 h-2 rounded-full ${vscuOnline ? 'bg-green-500' : 'bg-red-500'} ${vscuOnline ? 'animate-pulse' : ''}`}></span>
+            <span className="text-xs font-medium text-gray-600">
+              VSCU: <span className={vscuOnline ? 'text-green-600' : 'text-red-600'}>
+                {vscuOnline ? 'Online' : 'Offline'}
+              </span>
+            </span>
+          </div>
+          {stats.local > 0 && (
+            <>
+              <span className="text-gray-300">|</span>
+              <span className="text-xs text-amber-600 font-medium">{stats.local} pending</span>
+            </>
+          )}
+        </div>
       </div>
 
-      {/* Action Buttons - Only Blue and Orange */}
-      <div className="flex flex-wrap items-center gap-2 mb-6 pb-4 border-b border-gray-200">
-        <button
-          onClick={fetchItems}
-          disabled={loading}
-          className="bg-[#1a2a4a] hover:bg-[#0f1a33] text-white px-3 py-1.5 rounded-lg text-sm transition flex items-center gap-1.5 disabled:opacity-50"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.418 0V4h-5m5.582 0A9 9 0 1112 3" />
+      {/* Action Toolbar */}
+      <div className="flex flex-wrap items-center gap-2 mb-6 bg-white p-3 rounded-xl shadow-sm border border-gray-200">
+        <div className="flex-1 min-w-50 relative">
+          <input
+            type="text"
+            placeholder="Search services..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full px-3 py-2 pl-9 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-[#f47b20] bg-gray-50"
+          />
+          <svg className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
-          Refresh
-        </button>
+        </div>
+
+        <select
+          value={categoryFilter}
+          onChange={(e) => setCategoryFilter(e.target.value)}
+          className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-[#f47b20] bg-gray-50"
+        >
+          <option value="all">All Categories</option>
+          {SERVICE_CATEGORIES.map(cat => (
+            <option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>
+          ))}
+        </select>
 
         <button
           onClick={syncItemsFromVSCU}
           disabled={syncing || !vscuOnline}
-          className={`px-3 py-1.5 rounded-lg text-sm transition flex items-center gap-1.5 font-medium ${
-            syncing || !vscuOnline ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-[#1a2a4a] hover:bg-[#0f1a33] text-white'
+          className={`px-3 py-2 rounded-lg text-sm transition flex items-center gap-1.5 font-medium ${
+            syncing || !vscuOnline ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-[#1a2a4a] hover:bg-[#0f1a33] text-white'
           }`}
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -996,40 +653,8 @@ const stats = {
         </button>
 
         <button
-          onClick={resetLastSync}
-          disabled={syncing || !vscuOnline}
-          className={`px-3 py-1.5 rounded-lg text-sm transition flex items-center gap-1.5 font-medium ${
-            syncing || !vscuOnline ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-[#1a2a4a] hover:bg-[#0f1a33] text-white'
-          }`}
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.418 0V4h-5m5.582 0A9 9 0 1112 3" />
-          </svg>
-          Reset Sync
-        </button>
-
-        <button
-          onClick={handleBulkSync}
-          disabled={syncing || stats.local === 0 || !vscuOnline}
-          className={`px-3 py-1.5 rounded-lg text-sm transition flex items-center gap-1.5 font-medium ${
-            syncing || stats.local === 0 || !vscuOnline ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-[#f47b20] hover:bg-[#e06d1a] text-white'
-          }`}
-        >
-          {syncing ? (
-            <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.418 0V4h-5m5.582 0A9 9 0 1112 3" />
-            </svg>
-          ) : (
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.418 0V4h-5m5.582 0A9 9 0 1112 3" />
-            </svg>
-          )}
-          Send to VSCU ({stats.local})
-        </button>
-
-        <button
           onClick={() => setShowBulkImport(true)}
-          className="bg-[#1a2a4a] hover:bg-[#0f1a33] text-white px-3 py-1.5 rounded-lg text-sm transition flex items-center gap-1.5 font-medium"
+          className="bg-[#1a2a4a] hover:bg-[#0f1a33] text-white px-3 py-2 rounded-lg text-sm transition flex items-center gap-1.5 font-medium"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -1040,7 +665,7 @@ const stats = {
         {!selectedItem && (
           <button
             onClick={() => setShowForm(!showForm)}
-            className={`px-4 py-1.5 rounded-lg text-sm transition flex items-center gap-2 font-medium ${
+            className={`px-4 py-2 rounded-lg text-sm transition flex items-center gap-2 font-medium ${
               showForm ? 'bg-gray-200 hover:bg-gray-300 text-gray-700' : 'bg-[#f47b20] hover:bg-[#e06d1a] text-white'
             }`}
           >
@@ -1049,14 +674,33 @@ const stats = {
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
                 </svg>
-                Add Item
+                Add Service
               </>
             )}
           </button>
         )}
       </div>
 
-      {/* Forms */}
+      {/* Secondary Actions Row */}
+      <div className="flex flex-wrap items-center gap-2 mb-6">
+        <button
+          onClick={handleBulkSync}
+          disabled={syncing || stats.local === 0 || !vscuOnline}
+          className={`px-3 py-1.5 rounded-lg text-xs transition flex items-center gap-1.5 font-medium ${
+            syncing || stats.local === 0 || !vscuOnline ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-[#f47b20] hover:bg-[#e06d1a] text-white'
+          }`}
+        >
+          Send to VSCU ({stats.local})
+        </button>
+
+        {lastSyncDate && (
+          <span className="text-xs text-gray-400 ml-auto">
+            Last sync: {lastSyncDate}
+          </span>
+        )}
+      </div>
+
+      {/* Form */}
       {showForm && !selectedItem && (
         <div className="mb-6">
           <AddItemForm onSave={handleAddItem} onCancel={() => setShowForm(false)} isSaving={saving} />
@@ -1075,27 +719,23 @@ const stats = {
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
         <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
-          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Total Items</p>
+          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Total Services</p>
           <p className="text-xl font-bold text-[#1a2a4a] mt-1">{stats.total}</p>
         </div>
         <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
-          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Low Stock</p>
-          <p className="text-xl font-bold text-amber-500 mt-1">{stats.lowStock}</p>
+          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Active</p>
+          <p className="text-xl font-bold text-emerald-500 mt-1">{stats.active}</p>
         </div>
         <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
-          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Out of Stock</p>
-          <p className="text-xl font-bold text-red-500 mt-1">{stats.outOfStock}</p>
-        </div>
-        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
-          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Inventory Value</p>
-          <p className="text-xl font-bold text-[#1a2a4a] mt-1">
-            KES {stats.totalValue.toLocaleString()}
+          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Avg Price</p>
+          <p className="text-xl font-bold text-[#f47b20] mt-1">
+            KES {Math.round(stats.avgPrice).toLocaleString()}
           </p>
         </div>
         <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
-          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">VSCU Status</p>
+          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">VSCU Sync</p>
           <div className="flex items-center gap-4 mt-1">
             <span className="flex items-center gap-1.5 text-sm">
               <span className="w-2 h-2 rounded-full bg-green-500"></span>
@@ -1109,58 +749,13 @@ const stats = {
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3 mb-6 bg-white p-3 rounded-xl shadow-sm border border-gray-200">
-        <div className="flex-1 min-w-[180px] relative">
-          <input
-            type="text"
-            placeholder="Search by name, code, or class..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full px-3 py-2 pl-9 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-[#f47b20] bg-gray-50"
-          />
-          <svg className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-        </div>
-
-        <select
-          value={taxFilter}
-          onChange={(e) => setTaxFilter(e.target.value)}
-          className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-[#f47b20] bg-gray-50"
-        >
-          <option value="all">All Tax Types</option>
-          <option value="A">A - Exempt</option>
-          <option value="B">B - Standard (16%)</option>
-          <option value="C">C - Zero Rated</option>
-        </select>
-
-        <select
-          value={syncFilter}
-          onChange={(e) => setSyncFilter(e.target.value)}
-          className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-[#f47b20] bg-gray-50"
-        >
-          <option value="all">All Items</option>
-          <option value="synced">Synced</option>
-          <option value="local">Local Only</option>
-        </select>
-
-        {filteredItems.length !== items.length && (
-          <span className="text-sm text-gray-500">{filteredItems.length} of {items.length}</span>
-        )}
-      </div>
-
-      {/* Item List */}
+      {/* List View - Only */}
       {!showForm && !selectedItem && (
         <ItemManagement
           items={filteredItems}
           loading={loading}
           onEdit={setSelectedItem}
           onDelete={handleDeleteItem}
-          onComposition={(item) => {
-            setCompositionItem(item);
-            setShowComposition(true);
-          }}
           onSyncToVSCU={handleSendItemToVSCU}
         />
       )}

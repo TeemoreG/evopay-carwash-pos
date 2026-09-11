@@ -1,7 +1,16 @@
 import { useState, useEffect } from 'react';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { getLocalImportItems, getImportItemsFromVSCU, updateImportItems, getItems, getSyncStatus, processSync, checkVSCUStatus } from '../api/vscuApi';
+import { 
+  getLocalImportItems, 
+  getImportItemsFromVSCU, 
+  updateImportItems, 
+  getItems, 
+  getSyncStatus, 
+  processSync, 
+  checkVSCUStatus 
+} from '../api/vscuApi';
+import axiosInstance from '../api/axiosConfig';
 
 const Imports = () => {
   const [imports, setImports] = useState([]);
@@ -74,9 +83,7 @@ const Imports = () => {
     }
   };
 
-  // ============================================
-  // FETCH IMPORTS FROM KRA VSCU
-  // ============================================
+  // Fetch imports from KRA VSCU - saves to database via backend
   const fetchImportsFromVSCU = async () => {
     if (!vscuOnline) {
       toast.error('VSCU is offline. Please start VSCU first.');
@@ -91,9 +98,9 @@ const Imports = () => {
         const importList = response.data?.data?.itemList || [];
 
         if (importList.length > 0) {
-          setImports(importList);
+          await fetchImports();
           setLastSyncDate(new Date().toISOString().replace(/[-:T.]/g, '').slice(0, 14));
-          toast.success(`✅ Fetched ${importList.length} imports from KRA`);
+          toast.success(`Fetched ${importList.length} imports from KRA`);
         } else {
           toast.info('No new imports found from KRA');
         }
@@ -123,20 +130,20 @@ const Imports = () => {
       if (response.data.success) {
         const { synced, failed } = response.data;
         if (synced > 0 && failed === 0) {
-          setSyncMessage(`✅ ${synced} imports synced`);
+          setSyncMessage(`${synced} imports synced`);
           toast.success(`Synced ${synced} imports successfully`);
         } else if (synced > 0 && failed > 0) {
-          setSyncMessage(`⚠️ ${synced} synced, ${failed} failed`);
+          setSyncMessage(`${synced} synced, ${failed} failed`);
           toast.warning(`Synced ${synced} imports, ${failed} failed`);
         } else if (synced === 0 && failed > 0) {
-          setSyncMessage(`❌ ${failed} imports failed`);
+          setSyncMessage(`${failed} imports failed`);
           toast.error(`Sync failed: ${failed} imports`);
         } else {
-          setSyncMessage('✓ No imports to sync');
+          setSyncMessage('No imports to sync');
           toast.info('No pending imports to sync');
         }
       } else {
-        setSyncMessage('⚠️ Sync issue');
+        setSyncMessage('Sync issue');
         toast.warning('Sync completed with issues');
       }
 
@@ -145,7 +152,7 @@ const Imports = () => {
       fetchImports();
     } catch (error) {
       console.error('Sync failed:', error);
-      setSyncMessage('❌ Sync failed');
+      setSyncMessage('Sync failed');
       toast.error('Sync failed. Please try again.');
     } finally {
       setSyncing(false);
@@ -165,13 +172,37 @@ const Imports = () => {
       return;
     }
 
+    const taskCd = selectedImport.taskCd || selectedImport.task_cd;
+    if (!taskCd) {
+      toast.error('Task code not found for this import');
+      return;
+    }
+
+    // Get the selected item details
+    const selectedItemObj = items.find(i => i.item_cd === selectedItem);
+    if (!selectedItemObj) {
+      toast.error('Selected item not found');
+      return;
+    }
+
     setMatching(true);
     try {
-      await updateImportItems({
-        taskCd: selectedImport.task_cd,
+      const payload = {
+        tin: import.meta.env.VITE_VSCU_TIN || process.env.TIN,
+        bhfId: import.meta.env.VITE_VSCU_BHF_ID || process.env.BHF_ID,
+        taskCd: taskCd,
+        dclDe: selectedImport.dclDe || new Date().toISOString().replace(/[-:T.]/g, '').slice(0, 8),
+        itemSeq: selectedImport.itemSeq || 1,
+        hsCd: selectedImport.hsCd || selectedImport.hs_cd || '',
+        itemClsCd: selectedItemObj.item_cls_cd || selectedItemObj.itemClsCd,
         itemCd: selectedItem,
         imptItemSttsCd: '1',
-      });
+        modrNm: 'Admin',
+        modrId: 'Admin'
+      };
+
+      console.log('Match payload:', payload);
+      await updateImportItems(payload);
 
       toast.success('Import matched successfully!');
       setShowMatchModal(false);
@@ -179,7 +210,7 @@ const Imports = () => {
       fetchImportSyncStatus();
     } catch (error) {
       console.error('Match failed:', error);
-      toast.error('Failed to match import');
+      toast.error(error.response?.data?.message || 'Failed to match import');
     } finally {
       setMatching(false);
     }
@@ -393,6 +424,7 @@ const Imports = () => {
                 ) : (
                   filteredImports.map((imp) => {
                     const status = getStatusBadge(imp.imptItemSttsCd || imp.impt_item_stts_cd);
+                    const isMatched = imp.imptItemSttsCd === '1' || imp.impt_item_stts_cd === '1';
                     return (
                       <tr key={imp.taskCd || imp.task_cd} className="border-b border-gray-50 hover:bg-gray-50 transition">
                         <td className="px-4 py-3 font-mono text-xs text-gray-600">
@@ -414,9 +446,14 @@ const Imports = () => {
                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${status.color}`}>
                             {status.label}
                           </span>
+                          {isMatched && imp.item_cd && (
+                            <span className="ml-1 text-xs text-gray-400">
+                              ({imp.item_cd})
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-center">
-                          {imp.imptItemSttsCd === '1' || imp.impt_item_stts_cd === '1' ? (
+                          {isMatched ? (
                             <span className="text-xs text-gray-400">Matched</span>
                           ) : (
                             <button
@@ -454,9 +491,9 @@ const Imports = () => {
             <div className="p-5">
               <div className="mb-4">
                 <p className="text-sm text-gray-500">Import Record</p>
-                <p className="font-medium text-[#1a2a4a]">{selectedImport.item_name || 'Unknown'}</p>
-                <p className="text-xs text-gray-400">Task: {selectedImport.task_cd}</p>
-                <p className="text-xs text-gray-400">HS Code: {selectedImport.hs_cd || 'N/A'}</p>
+                <p className="font-medium text-[#1a2a4a]">{selectedImport.item_name || selectedImport.itemNm || 'Unknown'}</p>
+                <p className="text-xs text-gray-400">Task: {selectedImport.task_cd || selectedImport.taskCd}</p>
+                <p className="text-xs text-gray-400">HS Code: {selectedImport.hs_cd || selectedImport.hsCd || 'N/A'}</p>
               </div>
 
               <div>

@@ -21,58 +21,63 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }) => {
     }
   };
 
-  const links = [
-    { to: '/', label: 'Dashboard', icon: 'dashboard' },
-    { to: '/sales', label: 'Sales', icon: 'sales' },
-    { to: '/items', label: 'Items', icon: 'items' },
-    { to: '/stock', label: 'Stock', icon: 'stock' },
-    { to: '/purchases', label: 'Purchases', icon: 'purchases' },
-    { to: '/imports', label: 'Imports', icon: 'imports' },
-    { to: '/notices', label: 'Notices', icon: 'notices' },
-    { to: '/customers', label: 'Customers', icon: 'customers' },
-    { to: '/reports', label: 'Reports', icon: 'reports' },
-    { to: '/data', label: 'Data Management', icon: 'data' },
-    { to: '/branches', label: 'Branches', icon: 'branches' },
-    { to: '/cashiers', label: 'Cashier Management', icon: 'cashiers' },
-    { to: '/settings', label: 'Settings', icon: 'settings' },
-    { to: '/legal', label: 'Legal', icon: 'legal' },
+  const navGroups = [
+    {
+      label: 'Main',
+      links: [
+        { to: '/', label: 'Dashboard', icon: 'dashboard' },
+        { to: '/sales', label: 'POS', icon: 'car', primary: true },
+      ],
+    },
+    {
+      label: 'Catalog',
+      links: [
+        { to: '/items', label: 'Services', icon: 'droplets' },
+        { to: '/stock', label: 'Products', icon: 'package' },
+        { to: '/purchases', label: 'Purchases', icon: 'purchases' },
+      ],
+    },
+    {
+      label: 'Operations',
+      links: [
+        { to: '/customers', label: 'Customers', icon: 'customers' },
+        { to: '/reports', label: 'Reports', icon: 'reports' },
+        { to: '/cashiers', label: 'Cashiers', icon: 'cashiers' },
+      ],
+    },
+    {
+      label: 'System',
+      links: [
+        { to: '/settings', label: 'Settings', icon: 'settings' },
+      ],
+    },
   ];
 
-  const Icon = ({ name, className = "w-4 h-4" }) => {
+  const Icon = ({ name, className = 'w-4 h-4' }) => {
     const icons = {
       dashboard: (
         <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm0 10a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10-10a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zm0 10a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
         </svg>
       ),
-      sales: (
+      car: (
         <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 17h14M5 17a2 2 0 01-2-2v-3.5a2 2 0 011.2-1.84l1.34-.56a2 2 0 00.88-.76l1.1-1.7A2 2 0 009.34 6h5.32a2 2 0 001.82 1.14l1.1 1.7a2 2 0 00.88.76l1.34.56A2 2 0 0121 12.5V15a2 2 0 01-2 2M5 17a2 2 0 104 0m10 0a2 2 0 11-4 0" />
         </svg>
       ),
-      items: (
+      droplets: (
+        <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6h.1a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3v-6" />
+        </svg>
+      ),
+      package: (
         <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
         </svg>
       ),
-      stock: (
-        <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-        </svg>
-      ),
       purchases: (
         <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-        </svg>
-      ),
-      imports: (
-        <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
-        </svg>
-      ),
-      notices: (
-        <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
         </svg>
       ),
       customers: (
@@ -85,16 +90,6 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }) => {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
         </svg>
       ),
-      data: (
-        <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
-        </svg>
-      ),
-      branches: (
-        <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-        </svg>
-      ),
       cashiers: (
         <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zm-4 7a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
@@ -104,11 +99,6 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }) => {
         <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-        </svg>
-      ),
-      legal: (
-        <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
         </svg>
       ),
     };
@@ -135,15 +125,24 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }) => {
       )}
 
       <aside
-        className={`fixed md:static inset-y-0 left-0 z-50 w-[220px] bg-[#1a2a4a] text-white flex flex-col transition-transform duration-300 ${
+        className={`fixed md:static inset-y-0 left-0 z-50 w-55 bg-[#1a2a4a] text-white flex flex-col transition-transform duration-300 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
         }`}
       >
-        {/* Logo Section */}
-        <div className="flex items-center justify-end px-4 h-[56px] md:h-[64px] border-b border-white/10">
+        {/* Brand */}
+        <div className="flex items-center gap-2.5 px-4 h-14 md:h-16 border-b border-white/10">
+          <div className="w-8 h-8 rounded-lg bg-[#f47b20] flex items-center justify-center shrink-0">
+            <svg className="w-4.5 h-4.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 17h14M5 17a2 2 0 01-2-2v-3.5a2 2 0 011.2-1.84l1.34-.56a2 2 0 00.88-.76l1.1-1.7A2 2 0 009.34 6h5.32a2 2 0 001.82 1.14l1.1 1.7a2 2 0 00.88.76l1.34.56A2 2 0 0121 12.5V15a2 2 0 01-2 2M5 17a2 2 0 104 0m10 0a2 2 0 11-4 0" />
+            </svg>
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-bold leading-tight truncate">Evopay</p>
+            <p className="text-[10px] text-white/50 leading-tight truncate">Car Wash POS</p>
+          </div>
           <button
             onClick={() => setSidebarOpen(false)}
-            className="md:hidden text-white/60 hover:text-white transition"
+            className="md:hidden ml-auto text-white/60 hover:text-white transition"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
@@ -152,51 +151,47 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }) => {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto py-3 px-3 space-y-0.5">
-          {links.map((link) => (
-            <NavLink
-              key={link.to}
-              to={link.to}
-              onClick={() => setSidebarOpen(false)}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
-                  isActive
-                    ? 'bg-[#f47b20]/20 text-[#f47b20]'
-                    : 'text-white/70 hover:bg-white/10 hover:text-white'
-                }`
-              }
-            >
-              <Icon name={link.icon} />
-              <span className="font-medium">{link.label}</span>
-              {link.to === '/' && (
-                <span className="ml-auto w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-              )}
-            </NavLink>
+        <nav className="flex-1 overflow-y-auto py-3 px-3 space-y-4">
+          {navGroups.map((group) => (
+            <div key={group.label}>
+              <p className="px-3 mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-white/30">
+                {group.label}
+              </p>
+              <div className="space-y-0.5">
+                {group.links.map((link) => (
+                  <NavLink
+                    key={link.to}
+                    to={link.to}
+                    onClick={() => setSidebarOpen(false)}
+                    className={({ isActive }) =>
+                      `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                        isActive
+                          ? link.primary
+                            ? 'bg-[#f47b20] text-white font-semibold shadow-sm'
+                            : 'bg-[#f47b20]/20 text-[#f47b20] font-medium'
+                          : 'text-white/70 hover:bg-white/10 hover:text-white'
+                      }`
+                    }
+                  >
+                    <Icon name={link.icon} />
+                    <span className="font-medium">{link.label}</span>
+                  </NavLink>
+                ))}
+              </div>
+            </div>
           ))}
         </nav>
 
-        {/* Bottom Section */}
+        {/* Bottom */}
         <div className="border-t border-white/10 px-3 py-3 space-y-2">
-          {/* VSCU Status - Always shows as Ready */}
-          <div className="flex items-center justify-between px-2 py-1.5 bg-white/5 rounded-lg">
-            <span className="text-[10px] text-white/50">VSCU</span>
+          <div className="flex items-center justify-between px-2.5 py-1.5 bg-white/5 rounded-lg">
+            <span className="text-[10px] font-medium text-white/50 uppercase tracking-wide">VSCU</span>
             <div className="flex items-center gap-1.5">
-              <span className={`w-1.5 h-1.5 rounded-full ${vscuOnline ? 'bg-emerald-400' : 'bg-amber-400'}`}></span>
-              <span className="text-[10px] font-medium text-white/70">
-                {vscuOnline ? 'Online' : 'Offline'}
-              </span>
+              <span className={`w-1.5 h-1.5 rounded-full ${vscuOnline ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`}></span>
+              <span className="text-[10px] font-medium text-white/70">{vscuOnline ? 'Online' : 'Offline'}</span>
             </div>
           </div>
 
-          {/* Company Info */}
-          <div className="text-[10px] text-white/40 text-center px-2 py-1">
-            Evopay Limited
-          </div>
-          <div className="text-[9px] text-white/30 text-center px-2 py-0.5">
-            POS VSCU • KRA eTIMS Compliant
-          </div>
-
-          {/* Logout */}
           <button
             onClick={handleLogout}
             className="w-full px-3 py-2 rounded-lg text-xs font-semibold text-white/60 hover:text-white hover:bg-white/10 transition-all duration-200 flex items-center justify-center gap-2"
@@ -207,8 +202,9 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }) => {
             Logout
           </button>
 
-          <div className="text-[9px] text-white/30 text-center pt-1">
-            v2.0.21 | Sandbox
+          <div className="text-center pt-1 space-y-0.5">
+            <p className="text-[9px] text-white/30">Car Wash POS • KRA eTIMS</p>
+            <p className="text-[9px] text-white/25">v1.0.0</p>
           </div>
         </div>
       </aside>

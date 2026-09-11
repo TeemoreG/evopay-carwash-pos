@@ -88,9 +88,9 @@ const TaxReport = ({ data, loading }) => {
       doc.setFontSize(9);
       doc.text(`Company: Evopay Limited`, 14, yPos);
       yPos += 5;
-      doc.text(`TIN: ${import.meta.env.VITE_VSCU_TIN || 'P600003965A'}`, 14, yPos);
+      doc.text(`TIN: ${import.meta.env.VITE_VSCU_TIN }`, 14, yPos);
       yPos += 5;
-      doc.text(`Branch: ${import.meta.env.VITE_VSCU_BHF_ID || '00'}`, 14, yPos);
+      doc.text(`Branch: ${import.meta.env.VITE_VSCU_BHF_ID}`, 14, yPos);
       yPos += 5;
       doc.text(`Report Type: Tax Report`, 14, yPos);
       yPos += 5;
@@ -285,7 +285,7 @@ const TaxReport = ({ data, loading }) => {
       lines.push('"Evopay VSCU Cashier System"');
       lines.push('"Tax Report"');
       lines.push(`"Generated: ${new Date().toLocaleString()}"`);
-      lines.push(`"TIN: ${import.meta.env.VITE_VSCU_TIN || 'P600003965A'}"`);
+      lines.push(`"TIN: ${import.meta.env.VITE_VSCU_TIN }"`);
       lines.push('"KRA eTIMS Compliant"');
       lines.push('');
 
@@ -499,7 +499,7 @@ const TaxReport = ({ data, loading }) => {
       <div className="text-xs text-gray-400 text-center border-t pt-4 mt-4">
         <p>This Tax Report is KRA eTIMS compliant.</p>
         <p>Generated: {new Date().toLocaleString()}</p>
-        <p className="text-[10px] text-gray-500 mt-1">TIN: {import.meta.env.VITE_VSCU_TIN || 'P600003965A'} | Branch: {import.meta.env.VITE_VSCU_BHF_ID || '00'}</p>
+        <p className="text-[10px] text-gray-500 mt-1">TIN: {import.meta.env.VITE_VSCU_TIN } | Branch: {import.meta.env.VITE_VSCU_BHF_ID || '00'}</p>
       </div>
     </div>
   );

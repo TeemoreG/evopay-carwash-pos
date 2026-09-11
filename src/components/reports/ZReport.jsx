@@ -84,9 +84,9 @@ const ZReport = ({ data, loading, dateRange }) => {
       doc.setFontSize(9);
       doc.text(`Company: Evopay Limited`, 14, yPos);
       yPos += 5;
-      doc.text(`TIN: ${import.meta.env.VITE_VSCU_TIN || 'P600003965A'}`, 14, yPos);
+      doc.text(`TIN: ${import.meta.env.VITE_VSCU_TIN }`, 14, yPos);
       yPos += 5;
-      doc.text(`Branch: ${import.meta.env.VITE_VSCU_BHF_ID || '00'}`, 14, yPos);
+      doc.text(`Branch: ${import.meta.env.VITE_VSCU_BHF_ID }`, 14, yPos);
       yPos += 5;
       doc.text(`Report Type: Z Daily Report`, 14, yPos);
       yPos += 5;
@@ -226,7 +226,7 @@ const ZReport = ({ data, loading, dateRange }) => {
       lines.push('"Z Report - Daily Close"');
       lines.push(`"Period: ${dateRange?.start || 'N/A'} to ${dateRange?.end || 'N/A'}"`);
       lines.push(`"Generated: ${new Date().toLocaleString()}"`);
-      lines.push(`"TIN: ${import.meta.env.VITE_VSCU_TIN || 'P600003965A'}"`);
+      lines.push(`"TIN: ${import.meta.env.VITE_VSCU_TIN }"`);
       lines.push('"KRA eTIMS Compliant"');
       lines.push('');
 
@@ -415,7 +415,7 @@ const ZReport = ({ data, loading, dateRange }) => {
       <div className="text-xs text-gray-400 text-center border-t pt-4 mt-4">
         <p>This is the official Z Report for the selected date. KRA eTIMS Compliant.</p>
         <p>Generated: {new Date().toLocaleString()}</p>
-        <p className="text-[10px] text-gray-500 mt-1">TIN: {import.meta.env.VITE_VSCU_TIN || 'P600003965A'} | Branch: {import.meta.env.VITE_VSCU_BHF_ID || '00'}</p>
+        <p className="text-[10px] text-gray-500 mt-1">TIN: {import.meta.env.VITE_VSCU_TIN } | Branch: {import.meta.env.VITE_VSCU_BHF_ID || '00'}</p>
       </div>
     </div>
   );

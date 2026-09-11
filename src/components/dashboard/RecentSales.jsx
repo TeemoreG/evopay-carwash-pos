@@ -8,6 +8,17 @@ const RecentSales = ({ sales, loading, onViewAll }) => {
     return colors[status] || 'bg-slate-100 text-slate-700';
   };
 
+  const formatTs = (sale) => {
+    const ts = sale.created_at || sale.date;
+    if (!ts) return 'N/A';
+    const d = new Date(ts);
+    if (isNaN(d.getTime())) return sale.date || 'N/A';
+    return d.toLocaleString('en-KE', {
+      day: '2-digit', month: 'short',
+      hour: '2-digit', minute: '2-digit', hour12: false,
+    });
+  };
+
   if (loading) {
     return (
       <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-6">
@@ -23,20 +34,15 @@ const RecentSales = ({ sales, loading, onViewAll }) => {
       <div className="flex justify-between items-center mb-4">
         <div>
           <h2 className="text-base font-bold text-[#1a2a4a]">Recent Sales</h2>
-          <p className="text-[10px] text-slate-400">Latest transactions from the last 24 hours</p>
+          <p className="text-[10px] text-slate-400">Latest transactions</p>
         </div>
-        <button
-          onClick={onViewAll}
-          className="text-xs text-[#f47b20] hover:underline font-semibold"
-        >
+        <button onClick={onViewAll} className="text-xs text-[#f47b20] hover:underline font-semibold">
           View All →
         </button>
       </div>
 
       {sales.length === 0 ? (
-        <div className="text-center py-10 text-slate-400 text-sm">
-          No sales recorded yet.
-        </div>
+        <div className="text-center py-10 text-slate-400 text-sm">No sales recorded yet.</div>
       ) : (
         <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
           <table className="w-full text-sm">
@@ -46,7 +52,7 @@ const RecentSales = ({ sales, loading, onViewAll }) => {
                 <th className="pb-3 pr-3 font-semibold text-xs uppercase tracking-wider">Customer</th>
                 <th className="pb-3 pr-3 font-semibold text-xs uppercase tracking-wider hidden md:table-cell">Cashier</th>
                 <th className="pb-3 font-semibold text-xs uppercase tracking-wider text-right">Amount</th>
-                <th className="pb-3 font-semibold text-xs uppercase tracking-wider text-center hidden sm:table-cell">Date</th>
+                <th className="pb-3 font-semibold text-xs uppercase tracking-wider text-center hidden sm:table-cell">Date &amp; Time</th>
                 <th className="pb-3 font-semibold text-xs uppercase tracking-wider text-center">Status</th>
               </tr>
             </thead>
@@ -65,8 +71,8 @@ const RecentSales = ({ sales, loading, onViewAll }) => {
                   <td className="py-3 font-semibold text-[#1a2a4a] text-right text-sm">
                     KES {(sale.total || sale.amount || 0).toLocaleString()}
                   </td>
-                  <td className="py-3 text-slate-500 hidden sm:table-cell text-center text-sm">
-                    {sale.date ? new Date(sale.date).toLocaleDateString('en-KE') : 'N/A'}
+                  <td className="py-3 text-slate-500 hidden sm:table-cell text-center text-xs">
+                    {formatTs(sale)}
                   </td>
                   <td className="py-3 text-center">
                     <span className={`px-2.5 py-1 rounded-full text-[10px] font-semibold ${getStatusColor(sale.status)}`}>

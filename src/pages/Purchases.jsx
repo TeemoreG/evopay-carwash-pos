@@ -88,7 +88,7 @@ const Purchases = () => {
       const byEndpoint = response.data?.byEndpoint || [];
       let count = 0;
       byEndpoint.forEach(item => {
-        if (item.endpoint === '/purchases/savePurchases') {
+        if (item.endpoint === '/trnsPurchase/savePurchases') {
           count = item.count;
         }
       });
@@ -108,7 +108,6 @@ const Purchases = () => {
     }
   };
 
-  // Fetch purchases from VSCU
   const fetchPurchasesFromVSCU = async () => {
     if (!vscuOnline) {
       toast.error('VSCU is offline. Please start VSCU first.');
@@ -118,10 +117,10 @@ const Purchases = () => {
     setFetchingFromVSCU(true);
     try {
       const response = await getPurchasesFromVSCU(lastSyncDate || '20200101000000');
-      
+
       if (response.data?.resultCd === '000') {
-        const purchaseList = response.data?.data?.saleList || [];
-        
+        const purchaseList = response.data?.data?.purchaseList || [];
+
         if (purchaseList.length > 0) {
           await axiosInstance.post('/api/purchases/bulk', purchaseList);
           await fetchPurchases();
@@ -152,10 +151,10 @@ const Purchases = () => {
 
     try {
       const response = await processSync();
-      
+
       if (response.data.success) {
         const { synced, failed } = response.data;
-        
+
         if (synced > 0 && failed === 0) {
           setSyncMessage(`${synced} purchases synced`);
           toast.success(`Synced ${synced} purchases successfully`);
@@ -288,7 +287,10 @@ const Purchases = () => {
       subtotal: totals.totTaxblAmt,
       tax: totals.totTaxAmt,
       total: totals.totAmt,
+      payment_method: formData.payment_method || '01',
       date: formData.date,
+      remark: formData.remark || null,
+      cashier: 'Admin',
       status: 'Completed',
       items: formData.items,
     };
@@ -495,7 +497,7 @@ const Purchases = () => {
                     className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 text-sm rounded-lg transition"
                     title="Clear supplier"
                   >
-                    ✕
+                    ×
                   </button>
                 </div>
               </div>
@@ -622,7 +624,7 @@ const Purchases = () => {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#f47b20] focus:border-transparent"
                   >
                     <option value="A">Exempt</option>
-                    <option value="B">Standard (18%)</option>
+                    <option value="B">Standard (16%)</option>
                     <option value="C">Zero Rated</option>
                   </select>
                 </div>
@@ -679,9 +681,9 @@ const Purchases = () => {
                       </tr>
                     ))}
                     <tr className="font-bold border-t-2">
-                      <td colSpan="5" className="py-2 text-right">Subtotal:</td>
-                      <td className="py-2">KES {totals.totTaxAmt.toLocaleString()}</td>
-                      <td className="py-2 text-right">KES {totals.totTaxblAmt.toLocaleString()}</td>
+                      <td colSpan="4" className="py-2 text-right">Subtotal:</td>
+                      <td colSpan="2" className="py-2 text-right">KES {totals.totTaxblAmt.toLocaleString()}</td>
+                      <td className="py-2 text-right">KES {totals.totTaxAmt.toLocaleString()}</td>
                       <td></td>
                     </tr>
                     <tr className="font-bold text-[#f47b20]">
@@ -751,18 +753,19 @@ const Purchases = () => {
                   <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">VAT</th>
                   <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
                 </tr>
               </thead>
               <tbody>
                 {purchases.length === 0 ? (
                   <tr>
-                    <td colSpan="6" className="px-4 py-8 text-center text-gray-400">
+                    <td colSpan="7" className="px-4 py-8 text-center text-gray-400">
                       No purchase records found
                     </td>
                   </tr>
                 ) : (
                   purchases
-                    .filter(p => p.supplier_name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                    .filter(p => p.supplier_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            p.invoice_no?.toString().includes(searchTerm))
                     .map((p) => (
                       <tr key={p.id} className="border-b border-gray-50 hover:bg-gray-50 transition">
@@ -776,6 +779,13 @@ const Purchases = () => {
                           KES {(p.total || 0).toLocaleString()}
                         </td>
                         <td className="px-4 py-3 text-gray-500">{p.date || '-'}</td>
+                        <td className="px-4 py-3 text-center">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            p.synced === 1 ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+                          }`}>
+                            {p.synced === 1 ? 'Synced' : 'Pending'}
+                          </span>
+                        </td>
                       </tr>
                     ))
                 )}

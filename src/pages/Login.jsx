@@ -27,8 +27,8 @@ const Login = () => {
 
       if (response.data && response.data.success) {
         const userData = response.data.user;
-        const tin = import.meta.env.VITE_VSCU_TIN || 'P600003965A';
-        const bhfId = import.meta.env.VITE_VSCU_BHF_ID || '00';
+        const tin = import.meta.env.VITE_VSCU_TIN;
+        const bhfId = import.meta.env.VITE_VSCU_BHF_ID ;
         const cmcKey = localStorage.getItem('cmcKey') || 'local-dev-key';
 
         login(tin, bhfId, null, cmcKey, {

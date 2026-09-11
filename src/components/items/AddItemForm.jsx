@@ -1,19 +1,42 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 
-const AddItemForm = ({ item, onSave, onCancel, isSaving }) => {
+const SERVICE_CATEGORIES = [
+  { id: 'basic', name: 'Basic Wash' },
+  { id: 'standard', name: 'Standard Wash' },
+  { id: 'premium', name: 'Premium Wash' },
+  { id: 'vip', name: 'VIP Wash' },
+  { id: 'interior', name: 'Interior' },
+  { id: 'addon', name: 'Add-ons' },
+];
+
+const PRODUCT_CATEGORIES = [
+  { id: 'detergent', name: 'Detergents' },
+  { id: 'freshener', name: 'Air Fresheners' },
+  { id: 'accessories', name: 'Accessories' },
+  { id: 'polish', name: 'Polishes & Wax' },
+  { id: 'consumable', name: 'Consumables' },
+  { id: 'other', name: 'Other' },
+];
+
+const SERVICE_PRESETS = [800, 1000, 1200, 1500, 2000, 2500, 3000, 4000, 5000];
+const PRODUCT_PRESETS = [50, 100, 150, 200, 250, 300, 500, 800, 1000];
+
+const AddItemForm = ({ item, onSave, onCancel, isSaving, mode = 'service' }) => {
   const { user } = useAuth();
   const isEditing = !!item;
+  const isProduct = mode === 'product';
 
   const [formData, setFormData] = useState({
     itemCd: '',
     itemNm: '',
     itemStdNm: '',
     itemClsCd: '',
-    itemTyCd: '1',
+    itemTyCd: isProduct ? '1' : '2',
     dftPrc: '',
     taxTyCd: 'B',
     sftyQty: '',
+    stock: '',
     orgnNatCd: 'KE',
     pkgUnitCd: 'NT',
     qtyUnitCd: 'U',
@@ -21,19 +44,22 @@ const AddItemForm = ({ item, onSave, onCancel, isSaving }) => {
     isrcAplcbYn: 'N',
     bcd: '',
     addInfo: '',
+    category: isProduct ? 'detergent' : 'basic',
   });
 
   useEffect(() => {
     if (item) {
+      const itemIsProduct = (item.item_type === 'product') || (item.itemTyCd === '1');
       setFormData({
         itemCd: item.itemCd || item.item_cd || '',
         itemNm: item.itemNm || item.item_name || '',
         itemStdNm: item.itemStdNm || '',
-        itemClsCd: item.itemClsCd || item.item_cls_cd || '',
-        itemTyCd: item.itemTyCd || '1',
+        itemClsCd: item.itemClsCd || item.item_cls_cd || '5059690809',
+        itemTyCd: item.itemTyCd || (itemIsProduct ? '1' : '2'),
         dftPrc: item.dftPrc || item.price || '',
         taxTyCd: item.taxTyCd || item.tax_type || 'B',
         sftyQty: item.sftyQty || item.sfty_qty || '',
+        stock: item.stock ?? '',
         orgnNatCd: item.orgnNatCd || item.orgn_nat_cd || 'KE',
         pkgUnitCd: item.pkgUnitCd || item.pkg_unit_cd || 'NT',
         qtyUnitCd: item.qtyUnitCd || item.qty_unit_cd || 'U',
@@ -41,6 +67,7 @@ const AddItemForm = ({ item, onSave, onCancel, isSaving }) => {
         isrcAplcbYn: item.isrcAplcbYn || item.isrc_aplcb_yn || 'N',
         bcd: item.bcd || '',
         addInfo: item.addInfo || '',
+        category: item.category || (itemIsProduct ? 'detergent' : 'basic'),
       });
     }
   }, [item]);
@@ -50,34 +77,13 @@ const AddItemForm = ({ item, onSave, onCancel, isSaving }) => {
     setFormData({ ...formData, [name]: value });
   };
 
-  const emptyForm = {
-    itemCd: '',
-    itemNm: '',
-    itemStdNm: '',
-    itemClsCd: '',
-    itemTyCd: '1',
-    dftPrc: '',
-    taxTyCd: 'B',
-    sftyQty: '',
-    orgnNatCd: 'KE',
-    pkgUnitCd: 'NT',
-    qtyUnitCd: 'U',
-    useYn: 'Y',
-    isrcAplcbYn: 'N',
-    bcd: '',
-    addInfo: '',
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Validate required fields
     if (!formData.itemCd || !formData.itemNm || !formData.dftPrc || !formData.itemClsCd) {
-      alert('Please fill in: Item Code, Name, Price, and KRA Class Code');
+      alert('Please fill in: Code, Name, Price, and KRA Class Code');
       return;
     }
-
-    // Validate price is positive
     if (parseFloat(formData.dftPrc) < 0) {
       alert('Price must be greater than or equal to 0');
       return;
@@ -90,7 +96,7 @@ const AddItemForm = ({ item, onSave, onCancel, isSaving }) => {
       itemNm: formData.itemNm,
       itemStdNm: formData.itemStdNm || null,
       itemClsCd: formData.itemClsCd,
-      itemTyCd: formData.itemTyCd || '1',
+      itemTyCd: formData.itemTyCd || (isProduct ? '1' : '2'),
       orgnNatCd: formData.orgnNatCd,
       pkgUnitCd: formData.pkgUnitCd,
       qtyUnitCd: formData.qtyUnitCd,
@@ -111,39 +117,43 @@ const AddItemForm = ({ item, onSave, onCancel, isSaving }) => {
       regrId: user?.username || 'Admin',
       modrNm: user?.full_name || user?.username || 'Admin',
       modrId: user?.username || 'Admin',
+      item_type: isProduct ? 'product' : 'service',
+      category: formData.category,
+      stock: isProduct ? (parseInt(formData.stock) || 0) : 0,
     };
 
-    // This form gets unmounted by the parent (Items.jsx) as soon as the
-    // save succeeds, so success/error feedback is handled by the parent's
-    // toast notifications (react-toastify), not by local state here —
-    // a message set on this component after unmount would never render.
     onSave(payload);
   };
 
-  const handleCancel = () => {
-    setFormData(emptyForm);
-    setSuccessMsg('');
-    onCancel();
-  };
+  const categories = isProduct ? PRODUCT_CATEGORIES : SERVICE_CATEGORIES;
+  const pricePresets = isProduct ? PRODUCT_PRESETS : SERVICE_PRESETS;
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
       <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-semibold text-[#1a2a4a]">
-          {isEditing ? '✏️ Edit Item' : '➕ Add New Item'}
-        </h3>
+        <div>
+          <h3 className="text-lg font-semibold text-[#1a2a4a]">
+            {isEditing
+              ? `Edit ${isProduct ? 'Product' : 'Service'}`
+              : `Add New ${isProduct ? 'Product' : 'Service'}`}
+          </h3>
+          <p className="text-xs text-gray-400 mt-0.5">
+            {isProduct
+              ? 'Retail item with stock tracking'
+              : 'Car wash service with KRA eTIMS sync'}
+          </p>
+        </div>
         {isEditing && (
-          <span className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
+          <span className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full font-mono">
             {formData.itemCd}
           </span>
         )}
       </div>
 
       <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Item Code */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Item Code {!isEditing && <span className="text-red-500">*</span>}
+            {isProduct ? 'Product' : 'Service'} Code {!isEditing && <span className="text-red-500">*</span>}
           </label>
           <input
             type="text"
@@ -151,21 +161,18 @@ const AddItemForm = ({ item, onSave, onCancel, isSaving }) => {
             value={formData.itemCd}
             onChange={handleChange}
             disabled={isEditing}
-            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f47b20] focus:border-transparent text-sm ${
+            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f47b20] focus:border-transparent text-sm font-mono ${
               isEditing ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''
             }`}
-            placeholder="e.g. KE1NTXU0000001"
+            placeholder={isProduct ? 'e.g. PRD001' : 'e.g. SRV001'}
             required={!isEditing}
           />
-          {isEditing && (
-            <p className="text-xs text-gray-400 mt-1">Code cannot be changed</p>
-          )}
+          {isEditing && <p className="text-xs text-gray-400 mt-1">Code cannot be changed</p>}
         </div>
 
-        {/* Item Name */}
-        <div>
+        <div className="md:col-span-2">
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Item Name <span className="text-red-500">*</span>
+            {isProduct ? 'Product' : 'Service'} Name <span className="text-red-500">*</span>
           </label>
           <input
             type="text"
@@ -173,28 +180,26 @@ const AddItemForm = ({ item, onSave, onCancel, isSaving }) => {
             value={formData.itemNm}
             onChange={handleChange}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f47b20] focus:border-transparent text-sm"
-            placeholder="e.g. Office Chair"
+            placeholder={isProduct ? 'e.g. Air Freshener' : 'e.g. Standard Wash'}
             required
           />
         </div>
 
-        {/* Standard Name */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Standard Name
-          </label>
-          <input
-            type="text"
-            name="itemStdNm"
-            value={formData.itemStdNm}
+          <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+          <select
+            name="category"
+            value={formData.category}
             onChange={handleChange}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f47b20] focus:border-transparent text-sm"
-            placeholder="e.g. Chair, Office"
-          />
+          >
+            {categories.map((cat) => (
+              <option key={cat.id} value={cat.id}>{cat.name}</option>
+            ))}
+          </select>
         </div>
 
-        {/* Price */}
-        <div>
+        <div className="md:col-span-2">
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Price (KES) <span className="text-red-500">*</span>
           </label>
@@ -203,15 +208,61 @@ const AddItemForm = ({ item, onSave, onCancel, isSaving }) => {
             name="dftPrc"
             value={formData.dftPrc}
             onChange={handleChange}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f47b20] focus:border-transparent text-sm"
-            placeholder="e.g. 12500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f47b20] focus:border-transparent text-sm font-bold text-[#f47b20]"
+            placeholder={isProduct ? 'e.g. 200' : 'e.g. 800'}
             required
             min="0"
             step="0.01"
           />
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {pricePresets.map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                onClick={() => setFormData({ ...formData, dftPrc: preset })}
+                className={`px-2.5 py-1 text-xs rounded-lg border transition ${
+                  Number(formData.dftPrc) === preset
+                    ? 'bg-[#f47b20] text-white border-[#f47b20]'
+                    : 'bg-white text-gray-600 border-gray-200 hover:border-[#f47b20]'
+                }`}
+              >
+                {preset}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* KRA Class Code */}
+        {/* Duration (services) OR Stock (products) */}
+        {isProduct ? (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Stock</label>
+            <input
+              type="number"
+              name="stock"
+              value={formData.stock}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f47b20] focus:border-transparent text-sm"
+              placeholder="e.g. 50"
+              min="0"
+            />
+            <p className="text-xs text-gray-400 mt-1">Current stock on hand</p>
+          </div>
+        ) : (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Duration (minutes)</label>
+            <input
+              type="number"
+              name="sftyQty"
+              value={formData.sftyQty}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f47b20] focus:border-transparent text-sm"
+              placeholder="e.g. 30"
+              min="0"
+            />
+            <p className="text-xs text-gray-400 mt-1">Estimated wash time</p>
+          </div>
+        )}
+
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             KRA Class Code <span className="text-red-500">*</span>
@@ -221,35 +272,14 @@ const AddItemForm = ({ item, onSave, onCancel, isSaving }) => {
             name="itemClsCd"
             value={formData.itemClsCd}
             onChange={handleChange}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f47b20] focus:border-transparent text-sm"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f47b20] focus:border-transparent text-sm font-mono"
             placeholder="e.g. 5059690809"
             required
           />
-          <p className="text-xs text-gray-400 mt-1">KRA item classification code</p>
         </div>
 
-        {/* Item Type */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Item Type
-          </label>
-          <select
-            name="itemTyCd"
-            value={formData.itemTyCd}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f47b20] focus:border-transparent text-sm"
-          >
-            <option value="1">Goods</option>
-            <option value="2">Service</option>
-            <option value="3">Mixed</option>
-          </select>
-        </div>
-
-        {/* Tax Type */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Tax Type
-          </label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Tax Type</label>
           <select
             name="taxTyCd"
             value={formData.taxTyCd}
@@ -260,146 +290,52 @@ const AddItemForm = ({ item, onSave, onCancel, isSaving }) => {
             <option value="B">B - Standard (16%)</option>
             <option value="C">C - Zero Rated (0%)</option>
           </select>
-          <p className="text-xs text-gray-400 mt-1">VAT rate applied to this item</p>
         </div>
 
-        {/* Safety Stock */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Safety Stock
-          </label>
-          <input
-            type="number"
-            name="sftyQty"
-            value={formData.sftyQty}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f47b20] focus:border-transparent text-sm"
-            placeholder="e.g. 5"
-            min="0"
-          />
-          <p className="text-xs text-gray-400 mt-1">Minimum stock level alert</p>
-        </div>
-
-        {/* Origin */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Country of Origin
-          </label>
-          <input
-            type="text"
-            name="orgnNatCd"
-            value={formData.orgnNatCd}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f47b20] focus:border-transparent text-sm"
-            placeholder="KE"
-            maxLength="2"
-          />
-        </div>
-
-        {/* Package Unit */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Package Unit
-          </label>
-          <select
-            name="pkgUnitCd"
-            value={formData.pkgUnitCd}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f47b20] focus:border-transparent text-sm"
-          >
-            <option value="NT">NT - Each</option>
-            <option value="U">U - Unit</option>
-            <option value="KG">KG - Kilogram</option>
-            <option value="L">L - Liter</option>
-            <option value="M">M - Meter</option>
-            <option value="CM">CM - Centimeter</option>
-            <option value="MM">MM - Millimeter</option>
-          </select>
-        </div>
-
-        {/* Quantity Unit */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Quantity Unit
-          </label>
-          <select
-            name="qtyUnitCd"
-            value={formData.qtyUnitCd}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f47b20] focus:border-transparent text-sm"
-          >
-            <option value="U">U - Unit</option>
-            <option value="NT">NT - Each</option>
-            <option value="KG">KG - Kilogram</option>
-            <option value="L">L - Liter</option>
-            <option value="M">M - Meter</option>
-          </select>
-        </div>
-
-        {/* Barcode */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Barcode
-          </label>
-          <input
-            type="text"
-            name="bcd"
-            value={formData.bcd}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f47b20] focus:border-transparent text-sm"
-            placeholder="e.g. 8901234567890"
-          />
-        </div>
-
-        {/* Status */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Status
-          </label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
           <select
             name="useYn"
             value={formData.useYn}
             onChange={handleChange}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f47b20] focus:border-transparent text-sm"
           >
-            <option value="Y">✅ Active</option>
-            <option value="N">⛔ Inactive</option>
+            <option value="Y">Active</option>
+            <option value="N">Inactive</option>
           </select>
         </div>
 
-        {/* Insurance Applicable */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Insurance Applicable
-          </label>
-          <select
-            name="isrcAplcbYn"
-            value={formData.isrcAplcbYn}
+          <label className="block text-sm font-medium text-gray-700 mb-1">Barcode</label>
+          <input
+            type="text"
+            name="bcd"
+            value={formData.bcd}
             onChange={handleChange}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f47b20] focus:border-transparent text-sm"
-          >
-            <option value="N">No</option>
-            <option value="Y">Yes</option>
-          </select>
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f47b20] focus:border-transparent text-sm font-mono"
+            placeholder="Optional"
+          />
         </div>
 
-        {/* Additional Info */}
         <div className="md:col-span-2">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Additional Info
-          </label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
           <input
             type="text"
             name="addInfo"
             value={formData.addInfo}
             onChange={handleChange}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f47b20] focus:border-transparent text-sm"
-            placeholder="Any extra details about the item"
+            placeholder={isProduct ? 'e.g. 250ml can' : 'e.g. Exterior wash + vacuum'}
           />
         </div>
 
-        {/* Actions */}
-        <div className="flex items-end gap-3 md:col-span-3 pt-2 border-t border-gray-100 mt-2">
+        <input type="hidden" name="itemTyCd" value={formData.itemTyCd} />
+        <input type="hidden" name="orgnNatCd" value={formData.orgnNatCd} />
+        <input type="hidden" name="pkgUnitCd" value={formData.pkgUnitCd} />
+        <input type="hidden" name="qtyUnitCd" value={formData.qtyUnitCd} />
+        <input type="hidden" name="isrcAplcbYn" value={formData.isrcAplcbYn} />
+
+        <div className="flex items-center gap-3 md:col-span-3 pt-4 border-t border-gray-100">
           <button
             type="submit"
             disabled={isSaving}
@@ -419,32 +355,20 @@ const AddItemForm = ({ item, onSave, onCancel, isSaving }) => {
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
                 </svg>
-                {isEditing ? 'Update Item' : 'Save Item'}
+                {isEditing ? `Update ${isProduct ? 'Product' : 'Service'}` : `Save ${isProduct ? 'Product' : 'Service'}`}
               </>
             )}
           </button>
           <button
             type="button"
-            onClick={handleCancel}
+            onClick={onCancel}
             disabled={isSaving}
             className="border border-gray-300 hover:bg-gray-50 px-5 py-2.5 rounded-lg transition text-sm font-medium disabled:opacity-50"
           >
             Cancel
           </button>
-          {isEditing && (
-            <span className="text-xs text-gray-400 ml-auto">
-              Last modified: {item?.modrNm || 'Admin'}
-            </span>
-          )}
         </div>
       </form>
-
-      {/* VSCU Info */}
-      <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-100">
-        <p className="text-xs text-blue-600">
-          📋 VSCU fields: tin, bhfId, itemCd, itemNm, itemClsCd, taxTyCd, dftPrc
-        </p>
-      </div>
     </div>
   );
 };

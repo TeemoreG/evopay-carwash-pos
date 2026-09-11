@@ -9,8 +9,8 @@ const Settings = () => {
   const [vscuOnline, setVscuOnline] = useState(false);
   const [settings, setSettings] = useState({
     company_name: 'Evopay Limited',
-    company_pin: 'P600003965A',
-    branch_id: '00',
+    company_pin: import.meta.env.VITE_VSCU_TIN,
+    branch_id: import.meta.env.VITE_VSCU_BHF_ID,
     default_customer: 'Walk-in Customer',
     low_stock_threshold: '5',
     receipt_footer: 'Thank you for your business',
@@ -81,8 +81,8 @@ const Settings = () => {
     if (window.confirm('Reset all settings to defaults?')) {
       setSettings({
         company_name: 'Evopay Limited',
-        company_pin: 'P600003965A',
-        branch_id: '00',
+        company_pin: import.meta.env.VITE_VSCU_TIN,
+        branch_id: import.meta.env.VITE_VSCU_BHF_ID,
         default_customer: 'Walk-in Customer',
         low_stock_threshold: '5',
         receipt_footer: 'Thank you for your business',

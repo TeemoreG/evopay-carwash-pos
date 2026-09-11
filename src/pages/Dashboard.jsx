@@ -1,14 +1,14 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, 
+import {
+  Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend, ComposedChart, Line
 } from 'recharts';
-import { 
-  TrendingUp, ShoppingBag, Package, AlertTriangle, 
-  RefreshCw, CheckCircle2, XCircle, ArrowUpRight, Plus, FileText, 
-  Layers, Search, Activity, Clock, Calendar, Award, Zap, 
-  BarChart3, PieChart as PieChartIcon
+import {
+  TrendingUp, Package, AlertTriangle, RefreshCw, CheckCircle2, XCircle,
+  ArrowUpRight, Plus, FileText, Search, Activity, Clock, Calendar,
+  Award, Zap, BarChart3, PieChart as PieChartIcon, Car, Droplets,
+  Timer, Gauge, DollarSign, Users
 } from 'lucide-react';
 
 import RecentSales from '../components/dashboard/RecentSales';
@@ -20,156 +20,127 @@ const Dashboard = () => {
   const navigate = useNavigate();
 
   const [stats, setStats] = useState({
-    totalItems: 0,
-    totalSales: 0,
-    totalRevenue: 0,
-    stockValue: 0,
-    pendingSales: 0,
-    todaySales: 0,
-    totalTax: 0,
-    todayRevenue: 0,
-    avgOrderValue: 0,
-    growthRate: 0,
+    totalServices: 0, totalProducts: 0, totalSales: 0, totalRevenue: 0,
+    stockValue: 0, pendingSales: 0, todaySales: 0, totalTax: 0,
+    todayRevenue: 0, avgOrderValue: 0, growthRate: 0,
+    totalCustomers: 0, activeCashiers: 0,
+    revenuePerCar: 0, peakHour: '—', peakHourCount: 0,
+    carsPerHour: 0, openHours: 0,
   });
-
   const [recentSales, setRecentSales] = useState([]);
-  const [topItems, setTopItems] = useState([]);
+  const [topServices, setTopServices] = useState([]);
   const [chartData, setChartData] = useState([]);
   const [salesByPayment, setSalesByPayment] = useState([]);
+  const [repeatCustomerRate, setRepeatCustomerRate] = useState(0);
+  const [oldestPending, setOldestPending] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
-  const [vscuStatus, setVscuStatus] = useState({ connected: false, checking: true, latency: null });
+  const [vscuStatus, setVscuStatus] = useState({ connected: false, checking: true });
   const [searchQuery, setSearchQuery] = useState('');
   const [timeRange, setTimeRange] = useState('7d');
-  
-  // Add a counter to force re-renders
-  const [statusCheckCounter, setStatusCheckCounter] = useState(0);
   const intervalRef = useRef(null);
 
   useEffect(() => {
     fetchDashboardData();
     checkVSCU();
-
-    // Poll VSCU status every 5 seconds with force update
-    intervalRef.current = setInterval(() => {
-      checkVSCU();
-      // Force re-render by updating counter
-      setStatusCheckCounter(prev => prev + 1);
-    }, 5000);
-
-    // Also check when tab becomes visible again
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        checkVSCU();
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
+    intervalRef.current = setInterval(checkVSCU, 5000);
+    const onVis = () => document.visibilityState === 'visible' && checkVSCU();
+    document.addEventListener('visibilitychange', onVis);
     return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(intervalRef.current);
+      document.removeEventListener('visibilitychange', onVis);
     };
   }, []);
 
   const checkVSCU = async () => {
     try {
-      setVscuStatus(prev => ({ ...prev, checking: true }));
-      const startTime = Date.now();
-      const response = await checkVSCUStatus();
-      const latency = Date.now() - startTime;
-
-      setVscuStatus({ 
-        connected: response.data?.online === true, 
-        checking: false,
-        latency: response.data?.online ? latency : null
-      });
-    } catch (error) {
-      console.warn('VSCU Middleware offline:', error.message);
-      setVscuStatus({ connected: false, checking: false, latency: null });
+      setVscuStatus(p => ({ ...p, checking: true }));
+      const r = await checkVSCUStatus();
+      setVscuStatus({ connected: r.data?.online === true, checking: false });
+    } catch {
+      setVscuStatus({ connected: false, checking: false });
     }
   };
 
-  const calculateTopItems = (salesData) => {
-    const itemMap = {};
-    salesData.forEach(sale => {
-      if (sale.items && Array.isArray(sale.items)) {
-        sale.items.forEach(item => {
-          const key = item.item_cd || item.itemCd || 'UNKNOWN';
-          if (!itemMap[key]) {
-            itemMap[key] = {
-              name: item.item_name || item.itemNm || 'Unknown Product',
-              sold: 0,
-              revenue: 0,
-            };
-          }
-          itemMap[key].sold += item.quantity || 0;
-          itemMap[key].revenue += (item.quantity || 0) * (item.price || 0);
-        });
-      }
-    });
+  const getTs = (s) => s.created_at || s.date || '';
 
-    return Object.values(itemMap)
-      .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 5);
+  const calculateTopServices = (salesData) => {
+    const map = {};
+    salesData.forEach(sale => {
+      (sale.items || []).forEach(item => {
+        const key = item.item_cd || item.itemCd || 'UNKNOWN';
+        if (!map[key]) map[key] = { name: item.item_name || item.itemNm || 'Unknown', sold: 0, revenue: 0 };
+        map[key].sold += item.quantity || 0;
+        map[key].revenue += (item.quantity || 0) * (item.price || 0);
+      });
+    });
+    return Object.values(map).sort((a, b) => b.revenue - a.revenue).slice(0, 5);
   };
 
   const calculateSalesByPayment = (salesData) => {
-    const paymentMap = {};
-    const paymentLabels = { '01': 'Cash', '02': 'Card', '03': 'Mobile Money' };
-    
-    salesData.forEach(sale => {
-      const method = sale.payment_method || '01';
-      const label = paymentLabels[method] || method;
-      if (!paymentMap[label]) {
-        paymentMap[label] = { name: label, value: 0 };
-      }
-      paymentMap[label].value += sale.total || 0;
+    const labels = { '01': 'Cash', '02': 'Card', '03': 'M-Pesa', '04': 'Airtel', cash: 'Cash', card: 'Card', mpesa: 'M-Pesa', airtel_money: 'Airtel' };
+    const map = {};
+    salesData.forEach(s => {
+      const label = labels[s.payment_method] || s.payment_method || 'Other';
+      if (!map[label]) map[label] = { name: label, value: 0 };
+      map[label].value += s.total || 0;
     });
-
-    return Object.values(paymentMap);
+    return Object.values(map);
   };
 
-  const processChartData = (salesData, range = '7d') => {
-    let days = 7;
-    if (range === '30d') days = 30;
-    if (range === '90d') days = 90;
+  // POS metric: peak hour detection
+  const calculatePeakHour = (salesData) => {
+    const buckets = Array.from({ length: 24 }, (_, h) => ({ hour: h, count: 0 }));
+    salesData.forEach(s => {
+      const d = new Date(getTs(s));
+      if (!isNaN(d.getTime())) buckets[d.getHours()].count += 1;
+    });
+    const sorted = [...buckets].sort((a, b) => b.count - a.count);
+    const top = sorted[0];
+    if (!top || top.count === 0) return { label: '—', count: 0 };
+    const h = top.hour;
+    const label = `${h === 0 ? 12 : h > 12 ? h - 12 : h}${h < 12 ? 'am' : 'pm'}`;
+    return { label, count: top.count };
+  };
 
-    const lastNDays = [...Array(days)].map((_, i) => {
+  const calculateRepeatCustomerRate = (salesData) => {
+    const counts = {};
+    salesData.forEach(s => { if (s.customer) counts[s.customer] = (counts[s.customer] || 0) + 1; });
+    const arr = Object.values(counts);
+    if (!arr.length) return 0;
+    return Math.round((arr.filter(c => c > 1).length / arr.length) * 100);
+  };
+
+  const calculateOldestPending = (salesData) => {
+    const pending = salesData.filter(s => s.status === 'Pending' && getTs(s))
+      .sort((a, b) => new Date(getTs(a)) - new Date(getTs(b)));
+    if (!pending.length) return null;
+    const diffH = Math.floor((Date.now() - new Date(getTs(pending[0])).getTime()) / 3600000);
+    if (diffH < 1) return 'Just now';
+    if (diffH < 24) return `${diffH}h ago`;
+    return `${Math.floor(diffH / 24)}d ago`;
+  };
+
+  const processChartData = (salesData, range) => {
+    const days = range === '90d' ? 90 : range === '30d' ? 30 : 7;
+    const dates = [...Array(days)].map((_, i) => {
       const d = new Date();
       d.setDate(d.getDate() - (days - 1 - i));
       return d.toISOString().split('T')[0];
     });
-
-    return lastNDays.map(dateStr => {
-      const daySales = salesData.filter(s => {
-        const sDate = s.date ? new Date(s.date).toISOString().split('T')[0] : '';
-        return sDate === dateStr;
-      });
-
-      const dayRevenue = daySales
-        .filter(s => s.status === 'Completed')
-        .reduce((sum, s) => sum + (s.total || 0), 0);
-
-      const dayTax = daySales
-        .filter(s => s.status === 'Completed')
-        .reduce((sum, s) => sum + (s.tax || 0), 0);
-
-      const daySalesCount = daySales.length;
-
-      const dayLabel = new Date(dateStr).toLocaleDateString('en-KE', { 
+    return dates.map(dateStr => {
+      const daySales = salesData.filter(s => getTs(s).slice(0, 10) === dateStr);
+      const completed = daySales.filter(s => s.status === 'Completed');
+      const label = new Date(dateStr).toLocaleDateString('en-KE', {
         weekday: range === '7d' ? 'short' : 'numeric',
         month: range === '90d' ? 'short' : undefined,
       });
-
       return {
-        date: dayLabel,
-        revenue: dayRevenue,
-        tax: dayTax,
-        salesCount: daySalesCount,
-        fullDate: dateStr,
+        date: label,
+        revenue: completed.reduce((sum, s) => sum + (s.total || 0), 0),
+        tax: completed.reduce((sum, s) => sum + (s.tax || 0), 0),
+        salesCount: daySales.length,
       };
     });
   };
@@ -177,164 +148,129 @@ const Dashboard = () => {
   const fetchDashboardData = async () => {
     try {
       setRefreshing(true);
-
       const [salesRes, itemsRes, stockRes] = await Promise.all([
         getSales().catch(() => ({ data: [] })),
         getItems().catch(() => ({ data: [] })),
-        getStock().catch(() => ({ data: [] }))
+        getStock().catch(() => ({ data: [] })),
       ]);
-
       const sales = salesRes.data || [];
       const items = itemsRes.data || [];
       const stock = stockRes.data || [];
 
-      const completedSales = sales.filter(s => s.status === 'Completed');
-      const totalRevenue = completedSales.reduce((sum, s) => sum + (s.total || 0), 0);
-      const totalTax = completedSales.reduce((sum, s) => sum + (s.tax || 0), 0);
+      const completed = sales.filter(s => s.status === 'Completed');
+      const totalRevenue = completed.reduce((s, x) => s + (x.total || 0), 0);
+      const totalTax = completed.reduce((s, x) => s + (x.tax || 0), 0);
       const pendingSales = sales.filter(s => s.status === 'Pending').length;
 
       const todayStr = new Date().toISOString().split('T')[0];
-      const todaySalesArr = sales.filter(s => {
-        const sDate = s.date ? new Date(s.date).toISOString().split('T')[0] : '';
-        return sDate === todayStr;
-      });
+      const todayArr = sales.filter(s => getTs(s).slice(0, 10) === todayStr);
+      const todayRevenue = todayArr.filter(s => s.status === 'Completed').reduce((s, x) => s + (x.total || 0), 0);
 
-      const todayRevenue = todaySalesArr
-        .filter(s => s.status === 'Completed')
-        .reduce((sum, s) => sum + (s.total || 0), 0);
+      const productStock = stock.filter(s => s.item_type === 'product' || s.item_ty_cd === '1');
+      const stockValue = productStock.reduce((s, x) => s + (x.price || 0) * (x.stock || 0), 0);
 
-      const stockValue = stock.reduce((sum, s) => sum + ((s.price || 0) * (s.stock || 0)), 0);
-      
-      const avgOrderValue = completedSales.length > 0 
-        ? totalRevenue / completedSales.length 
-        : 0;
+      const avgOrderValue = completed.length ? totalRevenue / completed.length : 0;
+      const revenuePerCar = avgOrderValue;
+
+      const services = items.filter(i => (i.item_type || '').toLowerCase() === 'service');
+      const products = items.filter(i => (i.item_type || '').toLowerCase() === 'product');
+      const uniqueCustomers = new Set(sales.map(s => s.customer).filter(Boolean));
+      const uniqueCashiers = new Set(sales.map(s => s.cashier).filter(Boolean));
 
       const now = new Date();
-      const last7Start = new Date(now);
-      last7Start.setDate(now.getDate() - 7);
-      const prev7Start = new Date(last7Start);
-      prev7Start.setDate(last7Start.getDate() - 7);
+      const l7 = new Date(now); l7.setDate(now.getDate() - 7);
+      const p7 = new Date(l7); p7.setDate(l7.getDate() - 7);
+      const sum = (arr) => arr.reduce((s, x) => s + (x.total || 0), 0);
+      const last7 = sum(sales.filter(s => s.status === 'Completed' && new Date(getTs(s)) >= l7));
+      const prev7 = sum(sales.filter(s => s.status === 'Completed' && new Date(getTs(s)) >= p7 && new Date(getTs(s)) < l7));
+      const growthRate = prev7 > 0 ? ((last7 - prev7) / prev7) * 100 : 0;
 
-      const last7Sales = sales.filter(s => {
-        const d = new Date(s.date);
-        return d >= last7Start && d <= now && s.status === 'Completed';
-      });
-      const prev7Sales = sales.filter(s => {
-        const d = new Date(s.date);
-        return d >= prev7Start && d < last7Start && s.status === 'Completed';
-      });
-
-      const last7Revenue = last7Sales.reduce((sum, s) => sum + (s.total || 0), 0);
-      const prev7Revenue = prev7Sales.reduce((sum, s) => sum + (s.total || 0), 0);
-      const growthRate = prev7Revenue > 0 
-        ? ((last7Revenue - prev7Revenue) / prev7Revenue) * 100 
-        : 0;
+      const peak = calculatePeakHour(sales);
+      const todayCompleted = todayArr.filter(s => s.status === 'Completed').length;
+      const currentHour = new Date().getHours();
+      const openHours = Math.max(currentHour - 7, 1); // assume 7am open
+      const carsPerHour = todayCompleted > 0 ? (todayCompleted / openHours).toFixed(1) : 0;
 
       setStats({
-        totalItems: items.length,
-        totalSales: sales.length,
-        totalRevenue,
-        stockValue,
-        pendingSales,
-        todaySales: todaySalesArr.length,
-        totalTax,
-        todayRevenue,
-        avgOrderValue,
-        growthRate,
+        totalServices: services.length, totalProducts: products.length,
+        totalSales: sales.length, totalRevenue, stockValue, pendingSales,
+        todaySales: todayArr.length, totalTax, todayRevenue, avgOrderValue,
+        growthRate, totalCustomers: uniqueCustomers.size, activeCashiers: uniqueCashiers.size,
+        revenuePerCar: Math.round(revenuePerCar),
+        peakHour: peak.label, peakHourCount: peak.count,
+        carsPerHour, openHours,
       });
 
-      const sorted = [...sales].sort((a, b) => new Date(b.date) - new Date(a.date));
+      const sorted = [...sales].sort((a, b) => new Date(getTs(b)) - new Date(getTs(a)));
       setRecentSales(sorted.slice(0, 10));
-
-      setTopItems(calculateTopItems(sales));
+      setTopServices(calculateTopServices(sales));
       setChartData(processChartData(sales, timeRange));
       setSalesByPayment(calculateSalesByPayment(sales));
+      setRepeatCustomerRate(calculateRepeatCustomerRate(sales));
+      setOldestPending(calculateOldestPending(sales));
       setLastUpdated(new Date().toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' }));
-
-    } catch (error) {
-      console.error('Failed to fetch dashboard data:', error);
+    } catch (e) {
+      console.error('Dashboard fetch error:', e);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
-  const handleTimeRangeChange = (range) => {
-    setTimeRange(range);
-    fetchDashboardData();
-  };
-
-  const complianceRate = useMemo(() => {
-    if (stats.totalSales === 0) return 100;
-    const completed = stats.totalSales - stats.pendingSales;
-    return Math.round((completed / stats.totalSales) * 100);
-  }, [stats.totalSales, stats.pendingSales]);
-
   const filteredSales = useMemo(() => {
     if (!searchQuery) return recentSales;
-    return recentSales.filter(s => 
-      (s.invoiceNo || s.id || '').toString().toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (s.customerName || '').toLowerCase().includes(searchQuery.toLowerCase())
+    const q = searchQuery.toLowerCase();
+    return recentSales.filter(s =>
+      (s.invoice_no || '').toLowerCase().includes(q) ||
+      (s.customer || '').toLowerCase().includes(q)
     );
   }, [recentSales, searchQuery]);
 
   const todayFormatted = new Date().toLocaleDateString('en-KE', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
+    weekday: 'long', year: 'numeric', month: 'short', day: 'numeric',
   });
 
-  const CustomTooltip = ({ active, payload, label }) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-white p-3 rounded-lg shadow-lg border border-slate-200">
-          <p className="text-xs font-semibold text-slate-500">{label}</p>
-          {payload.map((entry, index) => (
-            <p key={index} className="text-sm font-bold" style={{ color: entry.color }}>
-              {entry.name}: KES {entry.value.toLocaleString()}
-            </p>
-          ))}
-        </div>
-      );
-    }
-    return null;
+  const TrendTooltip = ({ active, payload, label }) => {
+    if (!active || !payload?.length) return null;
+    return (
+      <div className="bg-white p-3 rounded-lg shadow-lg border border-slate-200">
+        <p className="text-xs font-semibold text-slate-500">{label}</p>
+        {payload.map((e, i) => (
+          <p key={i} className="text-sm font-bold" style={{ color: e.color }}>
+            {e.name}: {e.name === 'Washes' ? e.value : `KES ${e.value.toLocaleString()}`}
+          </p>
+        ))}
+      </div>
+    );
   };
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] text-slate-800 p-4 sm:p-6 space-y-6">
-      
-      {/* Header Section */}
+    <div className="min-h-screen bg-[#f8fafc] text-slate-800 p-4 sm:p-6 space-y-5">
+
+      {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm">
         <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-[#1a2a4a]">System Overview</h1>
-          </div>
-          <p className="text-slate-500 text-sm mt-0.5">Welcome back to Evopay VSCU POS</p>
+          <h1 className="text-2xl font-bold text-[#1a2a4a]">Car Wash Dashboard</h1>
+          <p className="text-slate-500 text-sm mt-0.5">Live overview of your wash business</p>
         </div>
-
         <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
           <div className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border ${
-            stats.growthRate > 0 
-              ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
-              : stats.growthRate < 0 
-                ? 'bg-rose-50 text-rose-700 border-rose-200'
-                : 'bg-slate-50 text-slate-600 border-slate-200'
+            stats.growthRate > 0 ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+            : stats.growthRate < 0 ? 'bg-rose-50 text-rose-700 border-rose-200'
+            : 'bg-slate-50 text-slate-600 border-slate-200'
           }`}>
             <TrendingUp className={`w-4 h-4 ${stats.growthRate < 0 ? 'rotate-180' : ''}`} />
             <span>{stats.growthRate > 0 ? '+' : ''}{stats.growthRate.toFixed(1)}%</span>
             <span className="text-xs text-slate-500 hidden sm:inline">vs last week</span>
           </div>
-
-          <button 
+          <button
             onClick={() => { fetchDashboardData(); checkVSCU(); }}
             disabled={refreshing}
-            className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition border border-slate-200/60 disabled:opacity-50"
+            className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg border border-slate-200/60 disabled:opacity-50"
           >
             <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-            <span className="hidden sm:inline">Sync Data</span>
+            <span className="hidden sm:inline">Refresh</span>
           </button>
-
           <div className="text-sm text-slate-600 bg-slate-50 px-3 py-2 rounded-lg border border-slate-200 font-medium flex items-center gap-1.5">
             <Calendar className="w-4 h-4" />
             {todayFormatted}
@@ -342,65 +278,53 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Hero Cards */}
+      {/* Hero Stats - POS-focused */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        
-        <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm relative overflow-hidden group hover:shadow-md transition">
-          <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-[#f47b20]/5 to-transparent rounded-full -translate-y-6 translate-x-6"></div>
-          <div className="flex justify-between items-start relative">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Revenue</p>
-              <h3 className="text-2xl font-extrabold text-[#1a2a4a] mt-1">
-                KES {stats.totalRevenue.toLocaleString()}
-              </h3>
-            </div>
-          </div>
-          <div className="mt-3 flex items-center gap-1 text-xs text-emerald-600 font-medium">
-            <TrendingUp className="w-3.5 h-3.5" />
-            <span>KES {stats.todayRevenue.toLocaleString()} today</span>
-            <span className="text-slate-400 ml-1">| {stats.todaySales} orders</span>
+        <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm hover:shadow-md transition">
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Today's Revenue</p>
+          <h3 className="text-2xl font-extrabold text-[#1a2a4a] mt-1">
+            KES {stats.todayRevenue.toLocaleString()}
+          </h3>
+          <div className="mt-3 text-xs text-slate-500">
+            Total: <span className="font-semibold text-slate-700">KES {stats.totalRevenue.toLocaleString()}</span>
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm group hover:shadow-md transition">
+        <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm hover:shadow-md transition">
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Transactions</p>
-              <h3 className="text-2xl font-extrabold text-[#1a2a4a] mt-1">
-                {stats.totalSales.toLocaleString()}
-              </h3>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Today's Washes</p>
+              <h3 className="text-2xl font-extrabold text-[#1a2a4a] mt-1">{stats.todaySales}</h3>
             </div>
-            <div className="p-2.5 bg-gradient-to-br from-orange-50 to-orange-100/50 text-[#f47b20] rounded-lg group-hover:scale-110 transition">
-              <ShoppingBag className="w-5 h-5" />
+            <div className="p-2.5 bg-linear-to-br from-orange-50 to-orange-100/50 text-[#f47b20] rounded-lg">
+              <Car className="w-5 h-5" />
             </div>
           </div>
-          <div className="mt-3 flex items-center gap-2 text-xs">
-            <span className="text-slate-500">Avg Order:</span>
-            <span className="font-semibold text-[#1a2a4a]">
-              KES {stats.avgOrderValue.toLocaleString()}
-            </span>
+          <div className="mt-3 flex items-center gap-1 text-xs text-slate-500">
+            <Gauge className="w-3 h-3" />
+            <span>{stats.carsPerHour} cars/hr</span>
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm group hover:shadow-md transition">
+        <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm hover:shadow-md transition">
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Inventory</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Revenue / Car</p>
               <h3 className="text-2xl font-extrabold text-[#1a2a4a] mt-1">
-                {stats.totalItems.toLocaleString()} <span className="text-xs font-normal text-slate-400">Items</span>
+                KES {stats.revenuePerCar.toLocaleString()}
               </h3>
             </div>
-            <div className="p-2.5 bg-gradient-to-br from-indigo-50 to-indigo-100/50 text-indigo-600 rounded-lg group-hover:scale-110 transition">
-              <Package className="w-5 h-5" />
-            </div>
+            <div className="p-2.5 bg-linear-to-br from-emerald-50 to-emerald-100/50 text-emerald-600 rounded-lg">
+  <TrendingUp className="w-5 h-5" />
+</div>
           </div>
-          <div className="mt-3 flex items-center gap-1 text-xs text-slate-500 font-medium truncate">
-            <span className="text-slate-400">Value:</span>
-            <span className="text-slate-700 font-semibold">KES {stats.stockValue.toLocaleString()}</span>
+          <div className="mt-3 flex items-center gap-1 text-xs text-slate-500">
+            <Timer className="w-3 h-3" />
+            <span>Peak: {stats.peakHour}</span>
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm group hover:shadow-md transition">
+        <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm hover:shadow-md transition">
           <div className="flex justify-between items-start">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Pending Sync</p>
@@ -408,110 +332,62 @@ const Dashboard = () => {
                 {stats.pendingSales}
               </h3>
             </div>
-            <div className={`p-2.5 rounded-lg transition ${
-              stats.pendingSales > 0 
-                ? 'bg-gradient-to-br from-amber-50 to-amber-100/50 text-amber-600 group-hover:scale-110' 
-                : 'bg-gradient-to-br from-emerald-50 to-emerald-100/50 text-emerald-600 group-hover:scale-110'
-            }`}>
+            <div className={`p-2.5 rounded-lg ${stats.pendingSales > 0 ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'}`}>
               <AlertTriangle className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-3 flex items-center justify-between text-xs">
-            <span className="text-slate-500">Requires sync</span>
-            <button 
-              onClick={() => navigate('/sales')}
-              className="text-[#f47b20] font-semibold hover:underline flex items-center gap-0.5"
-            >
+            <span className="text-slate-500">{oldestPending ? `Oldest: ${oldestPending}` : 'All synced'}</span>
+            <button onClick={() => navigate('/sales')} className="text-[#f47b20] font-semibold hover:underline flex items-center gap-0.5">
               Resolve <ArrowUpRight className="w-3 h-3" />
             </button>
           </div>
         </div>
-
       </div>
 
-      {/* Analytics Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
+      {/* Main Analytics */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+
+        {/* Revenue Trend */}
         <div className="lg:col-span-2 bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm">
           <div className="flex justify-between items-center mb-4">
             <div>
               <h2 className="text-base font-bold text-[#1a2a4a] flex items-center gap-2">
                 <BarChart3 className="w-4 h-4 text-[#f47b20]" />
-                Revenue & Tax Trend
+                Revenue Trend
               </h2>
-              <p className="text-xs text-slate-400">Daily financial trajectory from completed sales</p>
+              <p className="text-xs text-slate-400">Daily revenue and wash count</p>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="flex bg-slate-100 rounded-lg p-0.5">
-                {['7d', '30d', '90d'].map((range) => (
-                  <button
-                    key={range}
-                    onClick={() => handleTimeRangeChange(range)}
-                    className={`px-3 py-1 text-xs font-medium rounded-md transition ${
-                      timeRange === range 
-                        ? 'bg-white text-[#1a2a4a] shadow-sm' 
-                        : 'text-slate-500 hover:text-slate-700'
-                    }`}
-                  >
-                    {range === '7d' ? '7D' : range === '30d' ? '30D' : '90D'}
-                  </button>
-                ))}
-              </div>
-              <span className="px-2.5 py-1 text-xs bg-slate-100 text-slate-600 font-medium rounded-md">
-                KES
-              </span>
+            <div className="flex bg-slate-100 rounded-lg p-0.5">
+              {['7d', '30d', '90d'].map(r => (
+                <button
+                  key={r}
+                  onClick={() => { setTimeRange(r); setTimeout(fetchDashboardData, 0); }}
+                  className={`px-3 py-1 text-xs font-medium rounded-md transition ${
+                    timeRange === r ? 'bg-white text-[#1a2a4a] shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  {r.toUpperCase()}
+                </button>
+              ))}
             </div>
           </div>
-          
+
           <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#f47b20" stopOpacity={0.25}/>
-                    <stop offset="95%" stopColor="#f47b20" stopOpacity={0}/>
-                  </linearGradient>
-                  <linearGradient id="colorTax" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#1a2a4a" stopOpacity={0.15}/>
-                    <stop offset="95%" stopColor="#1a2a4a" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="#f47b20" stopOpacity={0.25} />
+                    <stop offset="95%" stopColor="#f47b20" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <XAxis dataKey="date" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
-                <YAxis 
-                  stroke="#94a3b8" 
-                  fontSize={11} 
-                  tickLine={false} 
-                  axisLine={false}
-                  tickFormatter={(value) => `KES ${(value/1000).toFixed(0)}k`}
-                />
-                <Tooltip content={<CustomTooltip />} />
-                <Area 
-                  type="monotone" 
-                  dataKey="revenue" 
-                  stroke="#f47b20" 
-                  strokeWidth={2.5} 
-                  fillOpacity={1} 
-                  fill="url(#colorRev)" 
-                  name="Revenue"
-                />
-                <Area 
-                  type="monotone" 
-                  dataKey="tax" 
-                  stroke="#1a2a4a" 
-                  strokeWidth={2} 
-                  fillOpacity={1} 
-                  fill="url(#colorTax)" 
-                  name="Tax"
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="salesCount" 
-                  stroke="#10b981" 
-                  strokeWidth={2} 
-                  dot={{ fill: '#10b981', r: 3 }} 
-                  name="Orders"
-                  yAxisId="right"
-                />
+                <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false}
+                  tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                <Tooltip content={<TrendTooltip />} />
+                <Area type="monotone" dataKey="revenue" stroke="#f47b20" strokeWidth={2.5} fillOpacity={1} fill="url(#colorRev)" name="Revenue" />
+                <Line type="monotone" dataKey="salesCount" stroke="#10b981" strokeWidth={2} dot={{ fill: '#10b981', r: 3 }} name="Washes" />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
@@ -522,218 +398,152 @@ const Dashboard = () => {
               <span className="text-[10px] text-slate-500">Revenue</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-3 h-0.5 bg-[#1a2a4a]"></span>
-              <span className="text-[10px] text-slate-500">Tax</span>
-            </div>
-            <div className="flex items-center gap-1.5">
               <span className="w-3 h-0.5 bg-emerald-500"></span>
-              <span className="text-[10px] text-slate-500">Orders</span>
+              <span className="text-[10px] text-slate-500">Washes</span>
             </div>
           </div>
         </div>
 
-        {/* Right Sidebar */}
-        <div className="space-y-6">
-          
+        {/* Right column */}
+        <div className="space-y-5">
+
+          {/* Payment Methods */}
           <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-bold text-[#1a2a4a] flex items-center gap-2">
-                <Activity className="w-4 h-4 text-[#f47b20]" />
-                Compliance & Health
-              </h2>
-            </div>
-
-            <div className="p-4 bg-gradient-to-br from-slate-50 to-slate-100/50 rounded-lg border border-slate-100 mb-3">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-xs font-semibold text-slate-600">eTIMS Compliance</span>
-                <span className="text-sm font-bold text-[#1a2a4a]">{complianceRate}%</span>
-              </div>
-              <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-                <div 
-                  className={`h-full transition-all duration-700 rounded-full ${
-                    complianceRate >= 90 ? 'bg-emerald-500' : 
-                    complianceRate >= 60 ? 'bg-amber-500' : 'bg-rose-500'
-                  }`}
-                  style={{ width: `${complianceRate}%` }}
-                ></div>
-              </div>
-              <p className="text-[10px] text-slate-400 mt-2">
-                {complianceRate >= 90 ? 'Excellent' : complianceRate >= 60 ? 'Moderate' : 'Needs attention'}
-              </p>
-            </div>
-
-            <div className="p-4 bg-gradient-to-br from-slate-50 to-slate-100/50 rounded-lg border border-slate-100 space-y-2">
-              <div className="flex justify-between items-center">
-                <span className="text-xs font-semibold text-slate-600">VSCU Middleware</span>
-                <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${
-                  vscuStatus.connected ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
-                }`}>
-                  {vscuStatus.checking ? (
-                    <RefreshCw className="w-3 h-3 animate-spin" />
-                  ) : vscuStatus.connected ? (
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                  ) : (
-                    <XCircle className="w-3.5 h-3.5 text-rose-600" />
-                  )}
-                  {vscuStatus.checking ? 'Checking...' : (vscuStatus.connected ? 'Online' : 'Offline')}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div>
-                  <span className="text-slate-400">Latency:</span>
-                  <span className="font-semibold text-slate-700 ml-1">
-                    {vscuStatus.latency ? `${vscuStatus.latency}ms` : 'N/A'}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-slate-400">Tax:</span>
-                  <span className="font-semibold text-slate-700 ml-1">
-                    KES {stats.totalTax.toLocaleString()}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <button 
-              onClick={() => {
-                checkVSCU();
-                setStatusCheckCounter(prev => prev + 1);
-              }}
-              className="w-full mt-3 text-xs font-medium text-slate-600 hover:text-[#1a2a4a] bg-slate-100 hover:bg-slate-200 py-2 rounded-lg transition text-center"
-            >
-              Re-test Middleware
-            </button>
-          </div>
-
-          {/* Payment Distribution */}
-          <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm">
-            <div className="flex justify-between items-center mb-3">
-              <h2 className="text-base font-bold text-[#1a2a4a] flex items-center gap-2">
-                <PieChartIcon className="w-4 h-4 text-[#f47b20]" />
-                Payment Distribution
-              </h2>
-            </div>
+            <h2 className="text-base font-bold text-[#1a2a4a] flex items-center gap-2 mb-3">
+              <PieChartIcon className="w-4 h-4 text-[#f47b20]" />
+              Payment Methods
+            </h2>
             {salesByPayment.length > 0 ? (
               <div className="h-44">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie
-                      data={salesByPayment}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={45}
-                      outerRadius={65}
-                      paddingAngle={2}
-                      dataKey="value"
-                    >
-                      {salesByPayment.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                    <Pie data={salesByPayment} cx="50%" cy="50%" innerRadius={45} outerRadius={65} paddingAngle={2} dataKey="value">
+                      {salesByPayment.map((_, i) => (
+                        <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                       ))}
                     </Pie>
-                    <Legend 
-                      iconType="circle" 
-                      iconSize={6}
-                      layout="horizontal"
-                      verticalAlign="bottom"
-                      align="center"
-                      formatter={(value) => (
-                        <span className="text-[10px] text-slate-600">{value}</span>
-                      )}
-                    />
+                    <Legend iconType="circle" iconSize={6} verticalAlign="bottom"
+                      formatter={(v) => <span className="text-[10px] text-slate-600">{v}</span>} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
             ) : (
-              <div className="text-center py-6 text-slate-400 text-xs">
-                No payment data available
-              </div>
+              <div className="text-center py-6 text-slate-400 text-xs">No payment data yet</div>
             )}
           </div>
-        </div>
 
+          {/* Business Health */}
+          <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm">
+            <h2 className="text-base font-bold text-[#1a2a4a] flex items-center gap-2 mb-4">
+              <Activity className="w-4 h-4 text-[#f47b20]" />
+              Business Health
+            </h2>
+
+            <div className="p-3 bg-slate-50 rounded-lg border border-slate-100 mb-3">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-xs font-semibold text-slate-600">Daily Target</span>
+                <span className="text-sm font-bold text-[#1a2a4a]">
+                  {Math.min(Math.round((stats.todayRevenue / 10000) * 100), 100)}%
+                </span>
+              </div>
+              <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                <div className="h-full rounded-full bg-linear-to-r from-[#f47b20] to-[#1a2a4a] transition-all duration-700"
+                  style={{ width: `${Math.min((stats.todayRevenue / 10000) * 100, 100)}%` }} />
+              </div>
+              <p className="text-[10px] text-slate-400 mt-2">
+                KES {stats.todayRevenue.toLocaleString()} of KES 10,000
+              </p>
+            </div>
+
+            <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-xs font-semibold text-slate-600">VSCU</span>
+                <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${
+                  vscuStatus.connected ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                }`}>
+                  {vscuStatus.checking ? <RefreshCw className="w-3 h-3 animate-spin" />
+                    : vscuStatus.connected ? <CheckCircle2 className="w-3.5 h-3.5" />
+                    : <XCircle className="w-3.5 h-3.5" />}
+                  {vscuStatus.checking ? 'Checking' : vscuStatus.connected ? 'Online' : 'Offline'}
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-xs">
+                <div><span className="text-slate-400">Customers:</span> <span className="font-semibold text-slate-700">{stats.totalCustomers}</span></div>
+                <div><span className="text-slate-400">Cashiers:</span> <span className="font-semibold text-slate-700">{stats.activeCashiers}</span></div>
+                <div><span className="text-slate-400">Repeat:</span> <span className="font-semibold text-slate-700">{repeatCustomerRate}%</span></div>
+              </div>
+            </div>
+          </div>
+
+        </div>
       </div>
 
-      {/* Recent Sales + Sidebar */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
+      {/* Recent + Top Services */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+
+        {/* Recent */}
         <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200/80 shadow-sm p-5">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-5">
             <div>
               <h2 className="text-base font-bold text-[#1a2a4a] flex items-center gap-2">
                 <Clock className="w-4 h-4 text-[#f47b20]" />
-                Recent Invoices
+                Recent Washes
               </h2>
-              <p className="text-xs text-slate-400">Latest synchronized and pending fiscal receipts</p>
+              <p className="text-xs text-slate-400">Latest transactions</p>
             </div>
-            
             <div className="relative w-full sm:w-64">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-              <input 
-                type="text" 
-                placeholder="Search invoice or client..." 
+              <input
+                type="text"
+                placeholder="Search invoice or plate..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#f47b20]"
               />
             </div>
           </div>
-
-          <RecentSales 
-            sales={filteredSales} 
-            loading={loading} 
-            onViewAll={() => navigate('/sales')} 
-          />
+          <RecentSales sales={filteredSales} loading={loading} onViewAll={() => navigate('/sales')} />
         </div>
 
-        <div className="space-y-6">
-          
+        {/* Right: Top Services + Quick Actions */}
+        <div className="space-y-5">
+
           <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-5">
             <div className="flex justify-between items-center mb-4">
               <div>
                 <h2 className="text-base font-bold text-[#1a2a4a] flex items-center gap-2">
                   <Award className="w-4 h-4 text-[#f47b20]" />
-                  Top Products
+                  Top Services
                 </h2>
-                <p className="text-xs text-slate-400">By gross revenue</p>
+                <p className="text-xs text-slate-400">By revenue</p>
               </div>
-              <button 
-                onClick={() => navigate('/reports')}
-                className="text-xs text-[#f47b20] hover:underline font-semibold"
-              >
-                All Reports →
+              <button onClick={() => navigate('/reports')} className="text-xs text-[#f47b20] hover:underline font-semibold">
+                Reports →
               </button>
             </div>
-
             {loading ? (
               <div className="flex justify-center py-8">
                 <div className="h-6 w-6 border-2 border-[#f47b20] border-t-transparent rounded-full animate-spin"></div>
               </div>
-            ) : topItems.length === 0 ? (
-              <div className="text-center py-8 text-slate-400 text-xs">
-                No revenue records logged yet
-              </div>
+            ) : topServices.length === 0 ? (
+              <div className="text-center py-8 text-slate-400 text-xs">No service records yet</div>
             ) : (
               <div className="space-y-3">
-                {topItems.map((item, index) => (
-                  <div key={index} className="flex items-center justify-between border-b border-slate-100 pb-2.5 last:border-0 last:pb-0 group">
-                    <div className="flex items-center gap-3">
-                      <span className={`flex items-center justify-center w-6 h-6 text-xs font-bold rounded-md ${
-                        index === 0 ? 'bg-amber-100 text-amber-700' :
-                        index === 1 ? 'bg-slate-100 text-slate-600' :
-                        index === 2 ? 'bg-orange-100 text-orange-700' :
-                        'bg-slate-100 text-slate-600'
-                      }`}>
-                        {index + 1}
-                      </span>
-                      <div className="max-w-[110px] sm:max-w-[140px] truncate">
-                        <p className="text-xs font-semibold text-slate-700 truncate group-hover:text-[#f47b20] transition">
-                          {item.name}
-                        </p>
-                        <p className="text-[10px] text-slate-400">{item.sold} units sold</p>
+                {topServices.map((item, i) => (
+                  <div key={i} className="flex items-center justify-between border-b border-slate-100 pb-2.5 last:border-0 last:pb-0">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className={`flex items-center justify-center w-6 h-6 text-xs font-bold rounded-md shrink-0 ${
+                        i === 0 ? 'bg-amber-100 text-amber-700'
+                        : i === 1 ? 'bg-slate-100 text-slate-600'
+                        : i === 2 ? 'bg-orange-100 text-orange-700'
+                        : 'bg-slate-100 text-slate-600'
+                      }`}>{i + 1}</span>
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-slate-700 truncate">{item.name}</p>
+                        <p className="text-[10px] text-slate-400">{item.sold} washes</p>
                       </div>
                     </div>
-                    <span className="text-xs font-bold text-[#1a2a4a]">
+                    <span className="text-xs font-bold text-[#1a2a4a] shrink-0 ml-2">
                       KES {item.revenue.toLocaleString()}
                     </span>
                   </div>
@@ -748,46 +558,31 @@ const Dashboard = () => {
               Quick Actions
             </h2>
             <div className="grid grid-cols-2 gap-2.5">
-              <button 
-                onClick={() => navigate('/sales')}
-                className="flex items-center justify-center gap-1.5 bg-[#f47b20] hover:bg-[#e06d1a] text-white p-2.5 rounded-lg text-xs font-semibold transition hover:scale-105 active:scale-95"
-              >
-                <Plus className="w-3.5 h-3.5" /> New Sale
+              <button onClick={() => navigate('/sales')} className="flex items-center justify-center gap-1.5 bg-[#f47b20] hover:bg-[#e06d1a] text-white p-2.5 rounded-lg text-xs font-semibold transition">
+                <Plus className="w-3.5 h-3.5" /> New Wash
               </button>
-              <button 
-                onClick={() => navigate('/items')}
-                className="flex items-center justify-center gap-1.5 bg-[#1a2a4a] hover:bg-[#0f1a33] text-white p-2.5 rounded-lg text-xs font-semibold transition hover:scale-105 active:scale-95"
-              >
-                <Layers className="w-3.5 h-3.5" /> Items
+              <button onClick={() => navigate('/items')} className="flex items-center justify-center gap-1.5 bg-[#1a2a4a] hover:bg-[#0f1a33] text-white p-2.5 rounded-lg text-xs font-semibold transition">
+                <Droplets className="w-3.5 h-3.5" /> Services
               </button>
-              <button 
-                onClick={() => navigate('/reports')}
-                className="flex items-center justify-center gap-1.5 bg-slate-800 hover:bg-slate-900 text-white p-2.5 rounded-lg text-xs font-semibold transition hover:scale-105 active:scale-95"
-              >
+              <button onClick={() => navigate('/reports')} className="flex items-center justify-center gap-1.5 bg-slate-800 hover:bg-slate-900 text-white p-2.5 rounded-lg text-xs font-semibold transition">
                 <FileText className="w-3.5 h-3.5" /> Reports
               </button>
-              <button 
-                onClick={() => navigate('/stock')}
-                className="flex items-center justify-center gap-1.5 bg-slate-800 hover:bg-slate-900 text-white p-2.5 rounded-lg text-xs font-semibold transition hover:scale-105 active:scale-95"
-              >
-                <Package className="w-3.5 h-3.5" /> Stock
+              <button onClick={() => navigate('/stock')} className="flex items-center justify-center gap-1.5 bg-slate-800 hover:bg-slate-900 text-white p-2.5 rounded-lg text-xs font-semibold transition">
+                <Package className="w-3.5 h-3.5" /> Products
               </button>
             </div>
           </div>
-
         </div>
-
       </div>
 
       {/* Footer */}
       <div className="flex flex-col sm:flex-row justify-between items-center pt-4 border-t border-slate-200 text-xs text-slate-400 gap-2">
-        <span>Last Synced: <strong className="text-slate-600">{lastUpdated || 'Initializing...'}</strong></span>
+        <span>Last Updated: <strong className="text-slate-600">{lastUpdated || 'Initializing...'}</strong></span>
         <span className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-          Evopay VSCU Core v2.0.21 | KRA eTIMS Compliant
+          Evopay Car Wash POS v1.0.0 | KRA eTIMS Compliant
         </span>
       </div>
-
     </div>
   );
 };

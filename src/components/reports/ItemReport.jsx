@@ -82,9 +82,9 @@ const ItemReport = ({ data = [], loading }) => {
       doc.setFontSize(9);
       doc.text(`Company: Evopay Limited`, 14, yPos);
       yPos += 5;
-      doc.text(`TIN: ${import.meta.env.VITE_VSCU_TIN || 'P600003965A'}`, 14, yPos);
+      doc.text(`TIN: ${import.meta.env.VITE_VSCU_TIN }`, 14, yPos);
       yPos += 5;
-      doc.text(`Branch: ${import.meta.env.VITE_VSCU_BHF_ID || '00'}`, 14, yPos);
+      doc.text(`Branch: ${import.meta.env.VITE_VSCU_BHF_ID }`, 14, yPos);
       yPos += 5;
       doc.text(`Report Type: PLU Report (Item Sales)`, 14, yPos);
       yPos += 5;

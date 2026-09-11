@@ -17,7 +17,7 @@ const ENDPOINTS = {
   
   // Imports
   GET_IMPORT_ITEMS: `${API_BASE}/imports`,
-  UPDATE_IMPORT_ITEMS: `${API_BASE}/imports`,
+  UPDATE_IMPORT_ITEMS: `${API_BASE}/imports/updateImportItems`,
   
   // Branches
   GET_BRANCHES: `${API_BASE}/branches`,

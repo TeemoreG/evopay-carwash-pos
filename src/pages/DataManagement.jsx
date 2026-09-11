@@ -1,13 +1,8 @@
-import { useState, useEffect } from 'react';
+// src/pages/DataManagement.jsx - FIXED
+import React, { useState, useEffect, Fragment } from 'react';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { 
-  getTaxRates,
-  getPaymentTypes,
-  getUnitCodes,
-  getClassifications,
-  getSettings,
-  updateSettings,
   checkVSCUStatus,
   getCodeList,
   getItemClassifications
@@ -15,12 +10,13 @@ import {
 import axiosInstance from '../api/axiosConfig';
 
 const DataManagement = () => {
-  const [activeTab, setActiveTab] = useState('tax');
+  const [activeTab, setActiveTab] = useState('all');
+  const [allCodes, setAllCodes] = useState([]);
   const [taxRates, setTaxRates] = useState([]);
   const [paymentTypes, setPaymentTypes] = useState([]);
   const [unitCodes, setUnitCodes] = useState([]);
   const [classifications, setClassifications] = useState([]);
-  const [suppliers, setSuppliers] = useState([]); 
+  const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
@@ -36,6 +32,8 @@ const DataManagement = () => {
   });
   const [vscuOnline, setVscuOnline] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [syncAllLoading, setSyncAllLoading] = useState(false);
+  const [syncProgress, setSyncProgress] = useState('');
 
   useEffect(() => {
     fetchAllData();
@@ -54,18 +52,33 @@ const DataManagement = () => {
   const fetchAllData = async () => {
     try {
       setLoading(true);
-      const [tax, payment, unit, classif, supplier] = await Promise.all([
-        getTaxRates(),
-        getPaymentTypes(),
-        getUnitCodes(),
-        getClassifications(),
-        axiosInstance.get('/api/suppliers') 
+      
+      const [tax, payment, unit, classif, supplier, allCodesData] = await Promise.all([
+        axiosInstance.get('/api/data/tax-rates').catch(() => ({ data: [] })),
+        axiosInstance.get('/api/data/payment-types').catch(() => ({ data: [] })),
+        axiosInstance.get('/api/data/unit-codes').catch(() => ({ data: [] })),
+        axiosInstance.get('/api/data/classifications').catch(() => ({ data: [] })),
+        axiosInstance.get('/api/suppliers').catch(() => ({ data: [] })),
+        axiosInstance.get('/api/data/codes/all').catch(() => ({ data: { data: { clsList: [] } } }))
       ]);
+      
       setTaxRates(tax.data || []);
       setPaymentTypes(payment.data || []);
       setUnitCodes(unit.data || []);
-      setClassifications(classif.data || []);
+      
+      // FIX: Ensure classifications is set correctly
+      const classifData = classif.data || [];
+      console.log('Classifications fetched:', classifData.length);
+      setClassifications(classifData);
+      
       setSuppliers(supplier.data || []);
+      
+      const codesData = allCodesData.data;
+      if (codesData?.resultCd === '000') {
+        setAllCodes(codesData?.data?.clsList || []);
+      } else {
+        setAllCodes([]);
+      }
     } catch (error) {
       console.error('Failed to fetch data:', error);
       toast.error('Error loading reference data');
@@ -74,164 +87,80 @@ const DataManagement = () => {
     }
   };
 
-  const syncTaxRatesFromVSCU = async () => {
+  const fetchCodeList = async () => {
     if (!vscuOnline) {
       toast.error('VSCU is offline. Please start VSCU first.');
       return;
     }
 
-    setSyncing(true);
+    setSyncAllLoading(true);
+    setSyncProgress('Fetching code list from KRA...');
+    
     try {
-      const response = await getCodeList('20200101000000');
+      const response = await getCodeList('20230328000000');
       
       if (response.data?.resultCd === '000') {
         const clsList = response.data?.data?.clsList || [];
+        const totalCodes = clsList.reduce((sum, c) => sum + (c.dtlList?.length || 0), 0);
         
-        const taxCategory = clsList.find(item => item.cdCls === '04');
+        await axiosInstance.post('/api/data/codes/bulk', clsList);
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        await fetchAllData();
         
-        if (taxCategory && taxCategory.dtlList) {
-          const taxRatesData = taxCategory.dtlList;
-          
-          try {
-            await axiosInstance.post('/api/data/tax-rates/bulk', taxRatesData);
-            await fetchAllData();
-            toast.success(`Synced ${taxRatesData.length} tax rates from KRA`);
-          } catch (err) {
-            console.error('Failed to bulk save tax rates:', err);
-            toast.error('Failed to save tax rates');
-          }
-        } else {
-          toast.info('No tax rates found in KRA');
-        }
+        setSyncProgress('');
+        toast.success(`Fetched ${clsList.length} code categories (${totalCodes} total codes) from KRA`);
       } else {
-        toast.warning(response.data?.resultMsg || 'Failed to sync tax rates');
+        toast.warning(response.data?.resultMsg || 'Failed to fetch code list');
       }
     } catch (error) {
-      console.error('Sync tax rates failed:', error);
-      toast.error('Failed to sync tax rates from KRA');
+      console.error('Fetch code list failed:', error);
+      toast.error(error.response?.data?.error || 'Failed to fetch code list from KRA');
     } finally {
-      setSyncing(false);
+      setSyncAllLoading(false);
+      setSyncProgress('');
     }
   };
 
-  const syncPaymentTypesFromVSCU = async () => {
+  const fetchItemClassificationList = async () => {
     if (!vscuOnline) {
       toast.error('VSCU is offline. Please start VSCU first.');
       return;
     }
 
     setSyncing(true);
+    setSyncProgress('Fetching classifications from KRA...');
+    
     try {
-      const response = await getCodeList('20200101000000');
-      
-      if (response.data?.resultCd === '000') {
-        const clsList = response.data?.data?.clsList || [];
-        
-        const paymentCategory = clsList.find(item => item.cdCls === '07');
-        
-        if (paymentCategory && paymentCategory.dtlList) {
-          const paymentTypesData = paymentCategory.dtlList;
-          
-          try {
-            await axiosInstance.post('/api/data/payment-types/bulk', paymentTypesData);
-            await fetchAllData();
-            toast.success(`Synced ${paymentTypesData.length} payment types from KRA`);
-          } catch (err) {
-            console.error('Failed to bulk save payment types:', err);
-            toast.error('Failed to save payment types');
-          }
-        } else {
-          toast.info('No payment types found in KRA');
-        }
-      } else {
-        toast.warning(response.data?.resultMsg || 'Failed to sync payment types');
-      }
-    } catch (error) {
-      console.error('Sync payment types failed:', error);
-      toast.error('Failed to sync payment types from KRA');
-    } finally {
-      setSyncing(false);
-    }
-  };
-
-  const syncUnitCodesFromVSCU = async () => {
-    if (!vscuOnline) {
-      toast.error('VSCU is offline. Please start VSCU first.');
-      return;
-    }
-
-    setSyncing(true);
-    try {
-      const response = await getCodeList('20200101000000');
-      
-      if (response.data?.resultCd === '000') {
-        const clsList = response.data?.data?.clsList || [];
-        
-        const unitCategory = clsList.find(item => item.cdCls === '10');
-        
-        if (unitCategory && unitCategory.dtlList) {
-          const unitCodesData = unitCategory.dtlList;
-          
-          try {
-            await axiosInstance.post('/api/data/unit-codes/bulk', unitCodesData);
-            await fetchAllData();
-            toast.success(`Synced ${unitCodesData.length} unit codes from KRA`);
-          } catch (err) {
-            console.error('Failed to bulk save unit codes:', err);
-            toast.error('Failed to save unit codes');
-          }
-        } else {
-          toast.info('No unit codes found in KRA');
-        }
-      } else {
-        toast.warning(response.data?.resultMsg || 'Failed to sync unit codes');
-      }
-    } catch (error) {
-      console.error('Sync unit codes failed:', error);
-      toast.error('Failed to sync unit codes from KRA');
-    } finally {
-      setSyncing(false);
-    }
-  };
-
-  const syncClassificationsFromVSCU = async () => {
-    if (!vscuOnline) {
-      toast.error('VSCU is offline. Please start VSCU first.');
-      return;
-    }
-
-    setSyncing(true);
-    try {
-      const response = await getItemClassifications('20200101000000');
+      const response = await getItemClassifications('20180523000000');
       
       if (response.data?.resultCd === '000') {
         const classList = response.data?.data?.itemClsList || [];
         
         if (classList.length > 0) {
-          try {
-            await axiosInstance.post('/api/data/classifications/bulk', classList);
-            await fetchAllData();
-            toast.success(`Synced ${classList.length} classifications from KRA`);
-          } catch (err) {
-            console.error('Failed to bulk save classifications:', err);
-            toast.error('Failed to save classifications');
-          }
+          await axiosInstance.post('/api/data/classifications/bulk', classList);
+          await new Promise(resolve => setTimeout(resolve, 1500));
+          await fetchAllData();
+          
+          setSyncProgress('');
+          toast.success(`Fetched ${classList.length} classifications from KRA`);
         } else {
-          toast.info('No classifications found in KRA');
+          toast.info('No classifications found');
         }
       } else {
-        toast.warning(response.data?.resultMsg || 'Failed to sync classifications');
+        toast.warning(response.data?.resultMsg || 'Failed to fetch classifications');
       }
     } catch (error) {
-      console.error('Sync classifications failed:', error);
-      toast.error('Failed to sync classifications from KRA');
+      console.error('Fetch classifications failed:', error);
+      toast.error(error.response?.data?.error || 'Failed to fetch classifications from KRA');
     } finally {
       setSyncing(false);
+      setSyncProgress('');
     }
   };
 
   const getCurrentData = () => {
     switch(activeTab) {
+      case 'all': return allCodes;
       case 'tax': return taxRates;
       case 'payment': return paymentTypes;
       case 'unit': return unitCodes;
@@ -243,11 +172,12 @@ const DataManagement = () => {
 
   const getEndpoint = () => {
     switch(activeTab) {
-      case 'tax': return '/data/tax-rates';
-      case 'payment': return '/data/payment-types';
-      case 'unit': return '/data/unit-codes';
-      case 'class': return '/data/classifications';
+      case 'tax': return '/api/data/tax-rates';
+      case 'payment': return '/api/data/payment-types';
+      case 'unit': return '/api/data/unit-codes';
+      case 'class': return '/api/data/classifications';
       case 'supplier': return '/api/suppliers';
+      default: return '';
     }
   };
 
@@ -257,20 +187,19 @@ const DataManagement = () => {
       case 'payment': return 'Payment Type';
       case 'unit': return 'Unit Code';
       case 'class': return 'Classification';
-      case 'supplier': return 'Supplier'; 
+      case 'supplier': return 'Supplier';
       default: return 'Item';
     }
   };
 
-  const getSyncLabel = () => {
-    switch(activeTab) {
-      case 'tax': return 'Tax Rates';
-      case 'payment': return 'Payment Types';
-      case 'unit': return 'Unit Codes';
-      case 'class': return 'Classifications';
-      default: return 'Data';
-    }
-  };
+  const tabs = [
+    { id: 'all', label: 'All Codes' },
+    { id: 'tax', label: 'Tax Rates' },
+    { id: 'payment', label: 'Payment Types' },
+    { id: 'unit', label: 'Unit Codes' },
+    { id: 'class', label: 'Classifications' },
+    { id: 'supplier', label: 'Suppliers' },
+  ];
 
   const handleAdd = () => {
     setEditingItem(null);
@@ -337,6 +266,11 @@ const DataManagement = () => {
       return;
     }
 
+    if (activeTab === 'all') {
+      toast.info('Cannot add codes directly. Use "Get Code List" button to fetch from KRA.');
+      return;
+    }
+
     if (!formData.code || !formData.label) {
       toast.error('Code and Name are required');
       return;
@@ -346,23 +280,13 @@ const DataManagement = () => {
       toast.error('Payment code must be exactly 2 digits (e.g., 01, 02, 03)');
       return;
     }
-
     if (activeTab === 'unit' && !/^[A-Z]{2}$/.test(formData.code)) {
       toast.error('Unit code must be exactly 2 uppercase letters (e.g., NT, KG, L)');
       return;
     }
-
     if (activeTab === 'class' && !/^\d{8}$/.test(formData.code)) {
       toast.error('Classification code must be exactly 8 digits (e.g., 50101010)');
       return;
-    }
-
-    if (activeTab === 'tax') {
-      const current = getCurrentData();
-      if (current.find(item => item.code === formData.code) && !editingItem) {
-        toast.error('Tax code already exists');
-        return;
-      }
     }
 
     try {
@@ -409,16 +333,29 @@ const DataManagement = () => {
     }
   };
 
-  const tabs = [
-    { id: 'tax', label: 'Tax Rates', sync: syncTaxRatesFromVSCU },
-    { id: 'payment', label: 'Payment Types', sync: syncPaymentTypesFromVSCU },
-    { id: 'unit', label: 'Unit Codes', sync: syncUnitCodesFromVSCU },
-    { id: 'class', label: 'Classifications', sync: syncClassificationsFromVSCU },
-    { id: 'supplier', label: 'Suppliers', sync: null }, 
-  ];
-
   const currentData = getCurrentData();
-  const totalItems = currentData.length;
+
+  const getCount = (tabId) => {
+    switch(tabId) {
+      case 'all': return allCodes.reduce((sum, c) => sum + (c.dtlList?.length || 0), 0);
+      case 'tax': return taxRates.length;
+      case 'payment': return paymentTypes.length;
+      case 'unit': return unitCodes.length;
+      case 'class': return classifications.length;
+      case 'supplier': return suppliers.length;
+      default: return 0;
+    }
+  };
+
+  const getCategoryCount = (tabId) => {
+    switch(tabId) {
+      case 'all': return allCodes.length;
+      default: return 0;
+    }
+  };
+
+  // Determine if add button should show
+  const showAddButton = activeTab !== 'supplier' && activeTab !== 'all';
 
   return (
     <div className="p-4">
@@ -429,42 +366,58 @@ const DataManagement = () => {
         <p className="text-gray-500 text-sm">Manage KRA reference data and system codes</p>
       </div>
 
-      <div className="flex items-center gap-3 mb-4 bg-white px-4 py-2 rounded-lg shadow-sm border border-gray-100">
+      {/* VSCU Status + Two Separate Buttons */}
+      <div className="flex items-center gap-3 mb-4 bg-white px-4 py-2 rounded-lg shadow-sm border border-gray-100 flex-wrap">
         <div className="flex items-center gap-2">
           <span className={`inline-block w-2 h-2 rounded-full ${vscuOnline ? 'bg-green-500' : 'bg-red-500'}`}></span>
           <span className="text-xs font-medium text-gray-600">VSCU: {vscuOnline ? 'Online' : 'Offline'}</span>
         </div>
         {vscuOnline && (
-          <button
-            onClick={() => {
-              const tab = tabs.find(t => t.id === activeTab);
-              if (tab && tab.sync) {
-                tab.sync();
-              }
-            }}
-            disabled={syncing || !tabs.find(t => t.id === activeTab)?.sync}
-            className={`px-3 py-1 rounded-lg text-xs transition flex items-center gap-1 ${
-              syncing || !tabs.find(t => t.id === activeTab)?.sync
-                ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                : 'bg-[#1a2a4a] hover:bg-[#2a3a5a] text-white'
-            }`}
-          >
-            {syncing ? (
-              <svg className="w-3 h-3 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.418 0V4h-5m5.582 0A9 9 0 1112 3" />
-              </svg>
-            ) : (
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.418 0V4h-5m5.582 0A9 9 0 1112 3" />
-              </svg>
-            )}
-            <span>{syncing ? 'Syncing...' : `Sync ${getSyncLabel()}`}</span>
-          </button>
+          <>
+            <button
+              onClick={fetchCodeList}
+              disabled={syncAllLoading}
+              className="px-3 py-1 rounded-lg text-xs transition flex items-center gap-1 bg-[#1a2a4a] hover:bg-[#2a3a5a] text-white disabled:opacity-50"
+            >
+              {syncAllLoading ? (
+                <svg className="w-3 h-3 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.418 0V4h-5m5.582 0A9 9 0 1112 3" />
+                </svg>
+              ) : (
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.418 0V4h-5m5.582 0A9 9 0 1112 3" />
+                </svg>
+              )}
+              <span>{syncAllLoading ? syncProgress || 'Fetching...' : 'Get Code List'}</span>
+            </button>
+            <button
+              onClick={fetchItemClassificationList}
+              disabled={syncing}
+              className="px-3 py-1 rounded-lg text-xs transition flex items-center gap-1 bg-amber-600 hover:bg-amber-700 text-white disabled:opacity-50"
+            >
+              {syncing ? (
+                <svg className="w-3 h-3 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.418 0V4h-5m5.582 0A9 9 0 1112 3" />
+                </svg>
+              ) : (
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.418 0V4h-5m5.582 0A9 9 0 1112 3" />
+                </svg>
+              )}
+              <span>{syncing ? syncProgress || 'Fetching...' : 'Get Item Classification List'}</span>
+            </button>
+          </>
         )}
         {!vscuOnline && <span className="text-xs text-yellow-600">VSCU offline - sync disabled</span>}
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-6 gap-3 mb-6">
+        <div className="bg-white p-3 rounded-lg shadow-sm border border-gray-100">
+          <p className="text-xs text-gray-500">All Codes</p>
+          <p className="text-lg font-bold text-[#1a2a4a]">{getCount('all')}</p>
+          <p className="text-xs text-gray-400">{getCategoryCount('all')} categories</p>
+        </div>
         <div className="bg-white p-3 rounded-lg shadow-sm border border-gray-100">
           <p className="text-xs text-gray-500">Tax Rates</p>
           <p className="text-lg font-bold text-[#1a2a4a]">{taxRates.length}</p>
@@ -487,40 +440,36 @@ const DataManagement = () => {
         </div>
       </div>
 
+      {/* Tabs */}
       <div className="flex flex-wrap items-center gap-1 mb-6 bg-white p-1 rounded-lg shadow-sm border border-gray-100">
-        {tabs.map((tab) => {
-          let count = 0;
-          if (tab.id === 'tax') count = taxRates.length;
-          else if (tab.id === 'payment') count = paymentTypes.length;
-          else if (tab.id === 'unit') count = unitCodes.length;
-          else if (tab.id === 'class') count = classifications.length;
-          else if (tab.id === 'supplier') count = suppliers.length;
-          
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-2 text-sm font-medium rounded-lg transition flex items-center gap-2 ${
-                activeTab === tab.id
-                  ? 'bg-[#f47b20] text-white shadow-sm'
-                  : 'text-gray-600 hover:bg-gray-100 hover:text-[#1a2a4a]'
-              }`}
-            >
-              {tab.label}
-              <span className={`text-xs ${activeTab === tab.id ? 'text-white/70' : 'text-gray-400'}`}>({count})</span>
-            </button>
-          );
-        })}
-        <div className="ml-auto flex gap-2">
+        {tabs.map((tab) => (
           <button
-            onClick={handleAdd}
-            className="bg-[#f47b20] hover:bg-[#e06d1a] text-white px-3 py-1.5 rounded-lg text-sm transition flex items-center gap-1"
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition flex items-center gap-2 ${
+              activeTab === tab.id
+                ? 'bg-[#f47b20] text-white shadow-sm'
+                : 'text-gray-600 hover:bg-gray-100 hover:text-[#1a2a4a]'
+            }`}
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-            </svg>
-            Add {getLabel()}
+            {tab.label}
+            <span className={`text-xs ${activeTab === tab.id ? 'text-white/70' : 'text-gray-400'}`}>
+              ({getCount(tab.id)})
+            </span>
           </button>
+        ))}
+        <div className="ml-auto flex gap-2">
+          {showAddButton && (
+            <button
+              onClick={handleAdd}
+              className="bg-[#f47b20] hover:bg-[#e06d1a] text-white px-3 py-1.5 rounded-lg text-sm transition flex items-center gap-1"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+              </svg>
+              Add {getLabel()}
+            </button>
+          )}
           <button
             onClick={fetchAllData}
             disabled={loading}
@@ -534,6 +483,7 @@ const DataManagement = () => {
         </div>
       </div>
 
+      {/* Table */}
       {loading ? (
         <div className="flex justify-center py-12">
           <div className="h-8 w-8 border-4 border-[#f47b20] border-t-transparent rounded-full animate-spin"></div>
@@ -544,34 +494,80 @@ const DataManagement = () => {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200">
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    {activeTab === 'supplier' ? 'PIN' : 'Code'}
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    {activeTab === 'supplier' ? 'Name' : 'Name'}
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    {activeTab === 'supplier' ? 'Contact' : 'Value / Description'}
-                  </th>
-                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+                  {activeTab === 'all' ? (
+                    <>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Category</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Code</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
+                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
+                    </>
+                  ) : (
+                    <>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        {activeTab === 'supplier' ? 'PIN' : 'Code'}
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        {activeTab === 'supplier' ? 'Contact' : 'Value / Description'}
+                      </th>
+                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+                    </>
+                  )}
                 </tr>
               </thead>
               <tbody>
                 {currentData.length === 0 ? (
                   <tr>
-                    <td colSpan="5" className="px-4 py-8 text-center text-gray-400">
-                      No data found. Click "Add {getLabel()}" to create one.
+                    <td colSpan={5} className="px-4 py-8 text-center text-gray-400">
+                      No data found. Click "Get Code List" or "Get Item Classification List" to fetch from KRA.
                     </td>
                   </tr>
+                ) : activeTab === 'all' ? (
+                  currentData.map((category) => (
+                    <Fragment key={category.cdCls}>
+                      <tr className="bg-gray-50 border-b border-gray-200">
+                        <td colSpan="5" className="px-4 py-2.5 font-bold text-[#1a2a4a]">
+                          {category.cdCls} - {category.cdClsNm}
+                          <span className="ml-2 text-xs font-normal text-gray-400">
+                            ({category.dtlList?.length || 0} codes)
+                          </span>
+                        </td>
+                      </tr>
+                      {category.dtlList && category.dtlList.length > 0 ? (
+                        category.dtlList.map((item) => (
+                          <tr key={`${category.cdCls}-${item.cd}`} className="border-b border-gray-50 hover:bg-gray-50 transition">
+                            <td className="px-4 py-2.5 text-xs text-gray-400 pl-8">{category.cdCls}</td>
+                            <td className="px-4 py-2.5 font-mono text-xs font-bold text-[#1a2a4a]">{item.cd}</td>
+                            <td className="px-4 py-2.5 text-[#1a2a4a]">{item.cdNm}</td>
+                            <td className="px-4 py-2.5 text-gray-500 text-xs">{item.cdDesc || '-'}</td>
+                            <td className="px-4 py-2.5 text-center">
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                item.useYn === 'Y' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                              }`}>
+                                {item.useYn === 'Y' ? 'Active' : 'Inactive'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan="5" className="px-4 py-2 text-center text-gray-400 text-xs">
+                            No codes in this category
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  ))
                 ) : (
                   currentData.map((item) => (
                     <tr key={item.code || item.id || item.pin} className="border-b border-gray-50 hover:bg-gray-50 transition">
                       <td className="px-4 py-3 font-mono text-xs font-bold text-[#1a2a4a]">
-                        {activeTab === 'supplier' ? item.pin : item.code}
+                        {item.code || item.pin || '--'}
                       </td>
                       <td className="px-4 py-3 text-[#1a2a4a]">
-                        {activeTab === 'supplier' ? item.name : (item.label || item.name)}
+                        {item.label || item.name || '--'}
                       </td>
                       <td className="px-4 py-3 text-gray-600">
                         {activeTab === 'supplier' 
@@ -582,9 +578,9 @@ const DataManagement = () => {
                       </td>
                       <td className="px-4 py-3 text-center">
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          item.is_active === 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
+                          item.is_active === 0 || item.use_yn === 'N' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
                         }`}>
-                          {item.is_active === 0 ? 'Inactive' : 'Active'}
+                          {item.is_active === 0 || item.use_yn === 'N' ? 'Inactive' : 'Active'}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right">
@@ -595,9 +591,9 @@ const DataManagement = () => {
                           Edit
                         </button>
                         <button
-                          onClick={() => handleDelete(activeTab === 'supplier' ? item.id : item.code)}
+                          onClick={() => handleDelete(item.code || item.id)}
                           className={`text-xs px-2 py-1 rounded transition ${
-                            activeTab === 'payment' && ['01', '02', '03'].includes(item.code)
+                            (activeTab === 'payment' && ['01', '02', '03'].includes(item.code))
                               ? 'text-gray-400 cursor-not-allowed'
                               : 'text-red-600 hover:text-red-800 hover:bg-red-50'
                           }`}
@@ -616,6 +612,7 @@ const DataManagement = () => {
         </div>
       )}
 
+      {/* Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
@@ -687,7 +684,7 @@ const DataManagement = () => {
                     />
                   </div>
                 </>
-              ) : (
+              ) : activeTab !== 'all' ? (
                 <>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -756,35 +753,18 @@ const DataManagement = () => {
                   )}
                   {(activeTab === 'class' || activeTab === 'unit' || activeTab === 'payment') && (
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Description {activeTab === 'class' ? '' : '(optional)'}
-                      </label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
                       <input
                         type="text"
                         value={formData.description}
                         onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f47b20] focus:border-transparent"
-                        placeholder={
-                          activeTab === 'class' ? 'e.g., Furniture classification' :
-                          'Additional info'
-                        }
+                        placeholder="Additional info"
                       />
                     </div>
                   )}
                 </>
-              )}
-
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-700">
-                <p className="font-medium">💡 Tips:</p>
-                <ul className="list-disc list-inside mt-1 space-y-0.5">
-                  {activeTab === 'payment' && <li>Payment codes: 01=Cash, 02=Card, 03=Mobile Money</li>}
-                  {activeTab === 'unit' && <li>Common units: NT=Each, KG=Kilogram, L=Litre, M=Meter</li>}
-                  {activeTab === 'class' && <li>KRA classification codes are 8 digits</li>}
-                  {activeTab === 'tax' && <li>Tax rates: A=0%, B=16%, C=0%</li>}
-                  {activeTab === 'supplier' && <li>Suppliers will appear in Purchases dropdown</li>}
-                  <li>Codes cannot be changed after creation</li>
-                </ul>
-              </div>
+              ) : null}
             </div>
 
             <div className="flex justify-end gap-3 p-5 border-t bg-gray-50 rounded-b-xl sticky bottom-0">
@@ -794,12 +774,14 @@ const DataManagement = () => {
               >
                 Cancel
               </button>
-              <button
-                onClick={handleSave}
-                className="px-5 py-2 text-sm bg-[#f47b20] hover:bg-[#e06d1a] text-white rounded-lg transition font-medium"
-              >
-                {editingItem ? 'Update' : 'Add'}
-              </button>
+              {activeTab !== 'all' && (
+                <button
+                  onClick={handleSave}
+                  className="px-5 py-2 text-sm bg-[#f47b20] hover:bg-[#e06d1a] text-white rounded-lg transition font-medium"
+                >
+                  {editingItem ? 'Update' : 'Add'}
+                </button>
+              )}
             </div>
           </div>
         </div>
