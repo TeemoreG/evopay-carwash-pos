@@ -1,18 +1,23 @@
 const express = require('express');
 const axios = require('axios');
 const db = require('../db');
+const mpesaQr = require('../services/mpesaQr');
 
 const router = express.Router();
 
 const CONSUMER_KEY = process.env.MPESA_CONSUMER_KEY;
 const CONSUMER_SECRET = process.env.MPESA_CONSUMER_SECRET;
 const PASSKEY = process.env.MPESA_PASSKEY;
-const SHORTCODE = process.env.MPESA_SHORTCODE || '174379';
-const CALLBACK_URL = process.env.MPESA_CALLBACK_URL || 'http://localhost:3000/api/pay/mpesa-callback';
-const PAYMENT_BASE_URL = process.env.VITE_PAYMENT_BASE_URL || 'http://localhost:5173';
+const SHORTCODE = process.env.MPESA_SHORTCODE;
+const CALLBACK_URL = process.env.MPESA_CALLBACK_URL;
+const PAYMENT_BASE_URL = process.env.VITE_PAYMENT_BASE_URL;
 const BASE_URL = process.env.MPESA_ENV === 'production'
   ? 'https://api.safaricom.co.ke'
   : 'https://sandbox.safaricom.co.ke';
+
+if (!CALLBACK_URL || !PAYMENT_BASE_URL) {
+  console.error('Missing MPESA_CALLBACK_URL or VITE_PAYMENT_BASE_URL in env');
+}
 
 let mpesaAccessToken = null;
 let mpesaTokenExpiry = 0;
@@ -47,7 +52,7 @@ function formatPhone(phone) {
   return cleaned;
 }
 
-// ==================== NEXT INVOICE (CW-YYYYMMDD-0001) ====================
+// ==================== NEXT INVOICE ====================
 router.get('/next-invoice', async (req, res) => {
   try {
     const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -63,12 +68,52 @@ router.get('/next-invoice', async (req, res) => {
   }
 });
 
-// ==================== CREATE QR SESSION ====================
+// ==================== M-PESA DYNAMIC QR ====================
+router.post('/qr/mpesa', async (req, res) => {
+  try {
+    const { invoice_no, amount } = req.body;
+    if (!invoice_no || !amount) {
+      return res.status(400).json({ error: 'invoice_no and amount required' });
+    }
+
+    const result = await mpesaQr.generateMpesaQR({
+      merchantName: 'Evopay Car Wash',
+      refNo: invoice_no,
+      amount,
+      size: '300'
+    });
+
+    await db.runAsync(
+      `UPDATE payment_sessions SET qr_code = ?, updated_at = datetime('now')
+       WHERE invoice_no = ?`,
+      [`MPESA_QR:${(result.QRCode || '').slice(0, 80)}`, invoice_no]
+    ).catch(() => {});
+
+    res.json({
+      success: true,
+      mode: 'mpesa',
+      qr_base64: result.QRCode,
+      response_code: result.ResponseCode,
+      request_id: result.RequestID
+    });
+  } catch (err) {
+    console.error('mpesa qr error:', err.response?.data || err.message);
+    res.status(500).json({
+      error: 'Failed to generate M-Pesa QR',
+      details: err.response?.data || err.message
+    });
+  }
+});
+
+// ==================== CREATE CUSTOM QR SESSION ====================
 router.post('/qr/generate', async (req, res) => {
   try {
     const { invoice_no, amount, sale_id } = req.body;
     if (!invoice_no || !amount || !sale_id) {
       return res.status(400).json({ error: 'invoice_no, amount, and sale_id are required' });
+    }
+    if (!PAYMENT_BASE_URL) {
+      return res.status(500).json({ error: 'VITE_PAYMENT_BASE_URL not configured' });
     }
 
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
@@ -88,6 +133,7 @@ router.post('/qr/generate', async (req, res) => {
 
     res.json({
       success: true,
+      mode: 'custom',
       invoice_no,
       amount,
       qr_payload: `${PAYMENT_BASE_URL}/pay/${invoice_no}`,
@@ -133,6 +179,12 @@ router.post('/stk-push', async (req, res) => {
   try {
     if (!invoice_no || !phone) {
       return res.status(400).json({ error: 'invoice_no and phone are required' });
+    }
+    if (!CALLBACK_URL || !CALLBACK_URL.startsWith('https://')) {
+      return res.status(500).json({
+        error: 'MPESA_CALLBACK_URL must be a public HTTPS URL',
+        current: CALLBACK_URL || null
+      });
     }
 
     const session = await db.getAsync(
@@ -197,9 +249,8 @@ router.post('/stk-push', async (req, res) => {
   }
 });
 
-// ==================== M-PESA CALLBACK (webhook) ====================
+// ==================== M-PESA CALLBACK ====================
 router.post('/mpesa-callback', async (req, res) => {
-  // Always ack quickly — Safaricom retries on non-200
   res.json({ ResultCode: 0, ResultDesc: 'Accepted' });
 
   try {
@@ -297,7 +348,10 @@ router.get('/mpesa/status', (req, res) => {
   res.json({
     configured,
     env: process.env.MPESA_ENV || 'sandbox',
-    shortcode: SHORTCODE
+    shortcode: SHORTCODE,
+    callback_url: CALLBACK_URL || null,
+    payment_base_url: PAYMENT_BASE_URL || null,
+    callback_is_https: !!(CALLBACK_URL && CALLBACK_URL.startsWith('https://'))
   });
 });
 

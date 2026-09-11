@@ -1,9 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import QRCode from 'qrcode';
 import { toast } from 'react-toastify';
+import { generateMpesaQR } from '../../api/vscuApi';
 
-const QRPaymentModal = ({ invoice, amount, onMarkPaid, onCancel, onStkPush, onPoll }) => {
-  const [qr, setQr] = useState(null);
+const QRPaymentModal = ({ invoice, amount, saleId, onMarkPaid, onCancel, onStkPush, onPoll }) => {
+  const [mode, setMode] = useState('mpesa');           // 'mpesa' | 'custom'
+  const [mpesaQr, setMpesaQr] = useState(null);
+  const [customQr, setCustomQr] = useState(null);
+  const [loadingQr, setLoadingQr] = useState(false);
   const [showStk, setShowStk] = useState(false);
   const [phone, setPhone] = useState('');
   const [status, setStatus] = useState('pending');
@@ -11,15 +15,43 @@ const QRPaymentModal = ({ invoice, amount, onMarkPaid, onCancel, onStkPush, onPo
   const pollRef = useRef(null);
 
   const safeAmount = Number(amount) || 0;
-  const payUrl = `${import.meta.env.VITE_PAYMENT_BASE_URL || 'http://localhost:5173'}/pay/${invoice}`;
 
+  // Load M-Pesa Dynamic QR (default mode)
   useEffect(() => {
-    if (!invoice) return;
-    QRCode.toDataURL(payUrl, { width: 240, margin: 2 })
-      .then(setQr)
-      .catch(() => toast.error('QR failed'));
-  }, [payUrl, invoice]);
+    if (!invoice || mode !== 'mpesa') return;
+    let cancelled = false;
+    setLoadingQr(true);
+    generateMpesaQR(invoice, safeAmount)
+      .then((r) => {
+        if (cancelled) return;
+        const b64 = r.data?.qr_base64;
+        if (b64) setMpesaQr(`data:image/png;base64,${b64}`);
+        else toast.error('No QR returned from M-Pesa');
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        console.error(e);
+        toast.error('M-Pesa QR failed — try custom');
+      })
+      .finally(() => !cancelled && setLoadingQr(false));
+    return () => { cancelled = true; };
+  }, [invoice, mode, safeAmount]);
 
+  // Load custom QR on demand
+  useEffect(() => {
+    if (mode !== 'custom' || customQr || !invoice) return;
+    (async () => {
+      try {
+        const url = `${import.meta.env.VITE_PAYMENT_BASE_URL || 'http://localhost:5173'}/pay/${invoice}`;
+        const data = await QRCode.toDataURL(url, { width: 260, margin: 2 });
+        setCustomQr(data);
+      } catch {
+        toast.error('Custom QR failed');
+      }
+    })();
+  }, [mode, invoice, customQr]);
+
+  // Poll for payment
   useEffect(() => {
     if (!onPoll || !invoice) return;
     pollRef.current = setInterval(async () => {
@@ -40,7 +72,9 @@ const QRPaymentModal = ({ invoice, amount, onMarkPaid, onCancel, onStkPush, onPo
   }, [invoice, onPoll, onMarkPaid]);
 
   const handleStk = async () => {
-    if (!/^0?[17]\d{8}$/.test(phone.replace(/\s/g, ''))) return toast.error('Enter valid phone');
+    if (!/^0?[17]\d{8}$/.test(phone.replace(/\s/g, ''))) {
+      return toast.error('Enter valid phone');
+    }
     setPushing(true);
     setStatus('processing');
     try {
@@ -52,9 +86,11 @@ const QRPaymentModal = ({ invoice, amount, onMarkPaid, onCancel, onStkPush, onPo
     } finally { setPushing(false); }
   };
 
+  const currentQr = mode === 'mpesa' ? mpesaQr : customQr;
+
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 max-h-[95vh] overflow-y-auto">
         <div className="flex justify-between items-start mb-4">
           <div>
             <h2 className="text-lg font-bold text-[#1a2a4a]">Payment</h2>
@@ -67,17 +103,50 @@ const QRPaymentModal = ({ invoice, amount, onMarkPaid, onCancel, onStkPush, onPo
           </button>
         </div>
 
+        {/* Mode toggle */}
+        <div className="flex bg-slate-100 rounded-lg p-0.5 mb-4">
+          {[
+            { id: 'mpesa', label: 'M-Pesa QR' },
+            { id: 'custom', label: 'Custom QR' },
+          ].map((m) => (
+            <button
+              key={m.id}
+              onClick={() => setMode(m.id)}
+              className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition ${
+                mode === m.id ? 'bg-white text-[#1a2a4a] shadow-sm' : 'text-slate-500'
+              }`}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+
+        {/* QR display */}
         <div className="text-center mb-4">
           <div className="inline-block p-3 bg-white border-2 border-slate-200 rounded-xl">
-            {qr ? <img src={qr} alt="QR" className="w-48 h-48" /> :
-              <div className="w-48 h-48 flex items-center justify-center text-slate-400 text-sm">Loading...</div>}
+            {loadingQr && mode === 'mpesa' ? (
+              <div className="w-52 h-52 flex items-center justify-center">
+                <svg className="w-6 h-6 animate-spin text-[#f47b20]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.418 0V4h-5m5.582 0A9 9 0 1112 3" />
+                </svg>
+              </div>
+            ) : currentQr ? (
+              <img src={currentQr} alt="QR" className="w-52 h-52" />
+            ) : (
+              <div className="w-52 h-52 flex items-center justify-center text-slate-400 text-sm">
+                Unavailable
+              </div>
+            )}
           </div>
           <p className="text-2xl font-bold text-[#f47b20] mt-3">
             KES {safeAmount.toLocaleString()}
           </p>
-          <p className="text-xs text-slate-500 mt-1">Customer scans to pay</p>
+          <p className="text-xs text-slate-500 mt-1">
+            {mode === 'mpesa' ? 'Scan with M-Pesa app' : 'Scan with any camera'}
+          </p>
         </div>
 
+        {/* STK Push toggle */}
         {!showStk ? (
           <button
             onClick={() => setShowStk(true)}
@@ -123,6 +192,7 @@ const QRPaymentModal = ({ invoice, amount, onMarkPaid, onCancel, onStkPush, onPo
           </div>
         )}
 
+        {/* Status */}
         {status !== 'pending' && (
           <div className={`mt-3 text-center text-xs font-medium ${
             status === 'completed' ? 'text-emerald-600' :
@@ -134,6 +204,7 @@ const QRPaymentModal = ({ invoice, amount, onMarkPaid, onCancel, onStkPush, onPo
           </div>
         )}
 
+        {/* Fallback */}
         <div className="mt-4 pt-3 border-t border-slate-100 flex gap-2">
           <button
             onClick={() => onMarkPaid(invoice)}

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { toast } from 'react-toastify';
 import ServiceGrid from '../components/pos/ServiceGrid';
 import Cart from '../components/pos/Cart';
@@ -29,13 +29,25 @@ const Sales = () => {
   const [currentSale, setCurrentSale] = useState(null);
   const [qrSession, setQrSession] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [now, setNow] = useState(new Date());
 
   useEffect(() => {
     fetchData();
     checkVSCU();
     const i = setInterval(checkVSCU, 15000);
-    return () => clearInterval(i);
+    const t = setInterval(() => setNow(new Date()), 30000);
+    return () => { clearInterval(i); clearInterval(t); };
   }, []);
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'F1') { e.preventDefault(); if (lines.length && !saving) handleCash(); }
+      if (e.key === 'F2') { e.preventDefault(); if (lines.length && !saving) handleQR(); }
+      if (e.key === 'Escape' && qrSession) setQrSession(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [lines, saving, qrSession]);
 
   const fetchData = async () => {
     try {
@@ -215,25 +227,90 @@ const Sales = () => {
   };
 
   const total = lines.reduce((s, l) => s + l.price * l.qty, 0);
+  const itemCount = lines.reduce((s, l) => s + l.qty, 0);
+
+  const todayStats = useMemo(() => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const todaySales = sales.filter(s =>
+      (s.created_at || s.date || '').slice(0, 10) === todayStr
+    );
+    const revenue = todaySales
+      .filter(s => s.status === 'Completed')
+      .reduce((sum, s) => sum + (s.total || 0), 0);
+    return { count: todaySales.length, revenue };
+  }, [sales]);
+
+  const timeStr = now.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit', hour12: false });
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] p-4 sm:p-6 space-y-4">
-      <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm px-5 py-3 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-[#1a2a4a]">Point of Sale</h1>
-          <p className="text-xs text-slate-400">Select services, add to cart, complete payment</p>
-        </div>
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 rounded-lg border border-slate-200">
-          <span className={`w-2 h-2 rounded-full ${vscuOnline ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
-          <span className="text-xs font-medium text-slate-600">VSCU {vscuOnline ? 'Online' : 'Offline'}</span>
+    <div className="min-h-screen bg-[#f8fafc] flex flex-col">
+      {/* Header */}
+      <div className="bg-white border-b border-slate-200/80 px-4 sm:px-6 py-3 sticky top-0 z-30">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-[#f47b20] flex items-center justify-center">
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 17h14M5 17a2 2 0 01-2-2v-3.5a2 2 0 011.2-1.84l1.34-.56a2 2 0 00.88-.76l1.1-1.7A2 2 0 009.34 6h5.32a2 2 0 001.82 1.14l1.1 1.7a2 2 0 00.88.76l1.34.56A2 2 0 0121 12.5V15a2 2 0 01-2 2M5 17a2 2 0 104 0m10 0a2 2 0 11-4 0" />
+              </svg>
+            </div>
+            <div>
+              <h1 className="text-lg sm:text-xl font-bold text-[#1a2a4a] leading-tight">Point of Sale</h1>
+              <p className="text-[11px] text-slate-400">Select services, add to cart, complete payment</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Today */}
+            <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-slate-50 rounded-lg border border-slate-200">
+              <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span className="text-xs font-medium text-slate-600 tabular-nums">{timeStr}</span>
+            </div>
+
+            {/* Today's stats */}
+            <div className="hidden sm:flex items-center gap-3 px-3 py-1.5 bg-slate-50 rounded-lg border border-slate-200">
+              <div className="text-xs text-slate-500">
+                Today <span className="font-bold text-[#1a2a4a] ml-1">{todayStats.count}</span>
+              </div>
+              <div className="w-px h-3 bg-slate-300"></div>
+              <div className="text-xs text-slate-500">
+                <span className="font-bold text-[#f47b20]">KES {todayStats.revenue.toLocaleString()}</span>
+              </div>
+            </div>
+
+            {/* VSCU */}
+            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${
+              vscuOnline ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'
+            }`}>
+              <span className={`w-2 h-2 rounded-full ${vscuOnline ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></span>
+              <span className={`text-xs font-semibold ${vscuOnline ? 'text-emerald-700' : 'text-rose-700'}`}>
+                VSCU {vscuOnline ? 'Online' : 'Offline'}
+              </span>
+            </div>
+
+            {/* Cashier */}
+            <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 bg-[#1a2a4a] rounded-lg">
+              <svg className="w-3.5 h-3.5 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zm-4 7a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+              <span className="text-xs font-medium text-white truncate max-w-30">
+                {user?.full_name || user?.username || 'Cashier'}
+              </span>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 h-[calc(100vh-220px)] min-h-125">
+      {/* Main Grid */}
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-3 p-3 sm:p-4 pb-24 lg:pb-4">
+        {/* Services Grid */}
+        <div className="lg:col-span-7 xl:col-span-8 h-[55vh] sm:h-[60vh] lg:h-[calc(100vh-180px)] lg:min-h-125">
           <ServiceGrid items={items} onAdd={addToCart} />
         </div>
-        <div className="flex flex-col gap-3 h-[calc(100vh-220px)] min-h-125">
+
+        {/* Cart */}
+        <div className="lg:col-span-5 xl:col-span-4 flex flex-col h-[50vh] sm:h-[55vh] lg:h-[calc(100vh-180px)] lg:min-h-125">
           <div className="flex-1 min-h-0">
             <Cart
               lines={lines}
@@ -243,24 +320,63 @@ const Sales = () => {
               setDiscount={setDiscount}
               customer={customer}
               setCustomer={setCustomer}
+              itemCount={itemCount}
+              onClear={resetCart}
             />
           </div>
-          <PaymentBar
-            total={total}
-            disabled={!lines.length || saving}
-            onCash={handleCash}
-            onQR={handleQR}
-          />
+          <div className="mt-3 hidden lg:block">
+            <PaymentBar
+              total={total}
+              disabled={!lines.length || saving}
+              onCash={handleCash}
+              onQR={handleQR}
+            />
+          </div>
         </div>
       </div>
 
-      <RecentSalesPanel
-        sales={sales}
-        loading={loading}
-        onRetry={() => {}}
-        onDownloadReceipt={() => {}}
-      />
+      {/* Mobile sticky payment bar */}
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-3 z-30 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs text-slate-500">
+            {itemCount} item{itemCount !== 1 ? 's' : ''}
+          </span>
+          <span className="text-lg font-bold text-[#f47b20]">
+            KES {Math.round(total).toLocaleString()}
+          </span>
+        </div>
+        <PaymentBar
+          total={total}
+          disabled={!lines.length || saving}
+          onCash={handleCash}
+          onQR={handleQR}
+        />
+      </div>
 
+      {/* Recent Sales */}
+      <div className="p-3 sm:p-4 pt-0">
+        <RecentSalesPanel
+          sales={sales}
+          loading={loading}
+          onRetry={() => {}}
+          onDownloadReceipt={() => {}}
+        />
+      </div>
+
+      {/* Keyboard hints (desktop) */}
+      <div className="hidden lg:flex fixed bottom-3 right-3 items-center gap-3 bg-white/95 border border-slate-200 rounded-lg px-3 py-2 text-[10px] text-slate-500 shadow-sm z-20">
+        <span className="flex items-center gap-1">
+          <kbd className="px-1.5 py-0.5 bg-slate-100 border border-slate-300 rounded text-[9px] font-mono">F1</kbd> Cash
+        </span>
+        <span className="flex items-center gap-1">
+          <kbd className="px-1.5 py-0.5 bg-slate-100 border border-slate-300 rounded text-[9px] font-mono">F2</kbd> QR
+        </span>
+        <span className="flex items-center gap-1">
+          <kbd className="px-1.5 py-0.5 bg-slate-100 border border-slate-300 rounded text-[9px] font-mono">Esc</kbd> Close
+        </span>
+      </div>
+
+      {/* QR Modal */}
       {qrSession?.invoice && qrSession?.amount > 0 && (
         <QRPaymentModal
           invoice={qrSession.invoice}
@@ -272,6 +388,7 @@ const Sales = () => {
         />
       )}
 
+      {/* Receipt */}
       {showReceipt && currentSale && (
         <ThermalReceipt
           sale={currentSale}

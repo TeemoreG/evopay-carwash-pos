@@ -249,8 +249,18 @@ export const getNextInvoice = () => {
   return axiosInstance.get('/api/pay/next-invoice');
 };
 
+// M-Pesa Dynamic QR (Safaricom) — default mode
+export const generateMpesaQR = (invoice_no, amount) => {
+  return axiosInstance.post('/api/pay/qr/mpesa', { invoice_no, amount });
+};
+
+// Custom QR (redirect to /pay/:invoice) — Airtel / Card
 export const createQRSession = (data) => {
   return axiosInstance.post('/api/pay/qr/generate', data);
+};
+
+export const generateCustomQR = (invoice_no, amount, sale_id) => {
+  return axiosInstance.post('/api/pay/qr/generate', { invoice_no, amount, sale_id });
 };
 
 export const getQRSession = (invoiceNo) => {

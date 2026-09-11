@@ -129,20 +129,11 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }) => {
           sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
         }`}
       >
-        {/* Brand */}
-        <div className="flex items-center gap-2.5 px-4 h-14 md:h-16 border-b border-white/10">
-          <div className="w-8 h-8 rounded-lg bg-[#f47b20] flex items-center justify-center shrink-0">
-            <svg className="w-4.5 h-4.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 17h14M5 17a2 2 0 01-2-2v-3.5a2 2 0 011.2-1.84l1.34-.56a2 2 0 00.88-.76l1.1-1.7A2 2 0 009.34 6h5.32a2 2 0 001.82 1.14l1.1 1.7a2 2 0 00.88.76l1.34.56A2 2 0 0121 12.5V15a2 2 0 01-2 2M5 17a2 2 0 104 0m10 0a2 2 0 11-4 0" />
-            </svg>
-          </div>
-          <div className="min-w-0">
-            <p className="text-sm font-bold leading-tight truncate">Evopay</p>
-            <p className="text-[10px] text-white/50 leading-tight truncate">Car Wash POS</p>
-          </div>
+        {/* Mobile close only */}
+        <div className="flex items-center justify-end px-4 h-14 md:h-16 border-b border-white/10">
           <button
             onClick={() => setSidebarOpen(false)}
-            className="md:hidden ml-auto text-white/60 hover:text-white transition"
+            className="md:hidden text-white/60 hover:text-white transition"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
