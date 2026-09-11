@@ -8,16 +8,15 @@ const router = express.Router();
 const CONSUMER_KEY = process.env.MPESA_CONSUMER_KEY;
 const CONSUMER_SECRET = process.env.MPESA_CONSUMER_SECRET;
 const PASSKEY = process.env.MPESA_PASSKEY;
-const SHORTCODE = process.env.MPESA_SHORTCODE;
+const SHORTCODE = process.env.MPESA_SHORTCODE || '174379';
 const CALLBACK_URL = process.env.MPESA_CALLBACK_URL;
 const PAYMENT_BASE_URL = process.env.VITE_PAYMENT_BASE_URL;
 const BASE_URL = process.env.MPESA_ENV === 'production'
   ? 'https://api.safaricom.co.ke'
   : 'https://sandbox.safaricom.co.ke';
 
-if (!CALLBACK_URL || !PAYMENT_BASE_URL) {
-  console.error('Missing MPESA_CALLBACK_URL or VITE_PAYMENT_BASE_URL in env');
-}
+if (!CALLBACK_URL) console.warn('WARN: MPESA_CALLBACK_URL not set — STK push will fail');
+if (!PAYMENT_BASE_URL) console.warn('WARN: VITE_PAYMENT_BASE_URL not set — QR will use relative path');
 
 let mpesaAccessToken = null;
 let mpesaTokenExpiry = 0;
@@ -112,23 +111,29 @@ router.post('/qr/generate', async (req, res) => {
     if (!invoice_no || !amount || !sale_id) {
       return res.status(400).json({ error: 'invoice_no, amount, and sale_id are required' });
     }
-    if (!PAYMENT_BASE_URL) {
-      return res.status(500).json({ error: 'VITE_PAYMENT_BASE_URL not configured' });
-    }
 
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
 
-    await db.runAsync(
-      `INSERT INTO payment_sessions
-       (invoice_no, sale_id, amount, merchant_id, status, expires_at, created_at)
-       VALUES (?, ?, ?, ?, 'pending', ?, datetime('now'))`,
-      [invoice_no, sale_id, amount, SHORTCODE, expiresAt]
+    const existing = await db.getAsync(
+      `SELECT * FROM payment_sessions WHERE invoice_no = ?`,
+      [invoice_no]
     );
+    if (!existing) {
+      await db.runAsync(
+        `INSERT INTO payment_sessions
+         (invoice_no, sale_id, amount, merchant_id, status, expires_at, created_at)
+         VALUES (?, ?, ?, ?, 'pending', ?, datetime('now'))`,
+        [invoice_no, sale_id, amount, SHORTCODE, expiresAt]
+      );
+    }
+
+    const qrPayload = PAYMENT_BASE_URL
+      ? `${PAYMENT_BASE_URL}/pay/${invoice_no}`
+      : `/pay/${invoice_no}`;
 
     await db.runAsync(
-      `UPDATE sales SET qr_code = ?, payment_status = 'pending'
-       WHERE invoice_no = ?`,
-      [`${PAYMENT_BASE_URL}/pay/${invoice_no}`, invoice_no]
+      `UPDATE sales SET qr_code = ?, payment_status = 'pending' WHERE invoice_no = ?`,
+      [qrPayload, invoice_no]
     ).catch(() => {});
 
     res.json({
@@ -136,7 +141,7 @@ router.post('/qr/generate', async (req, res) => {
       mode: 'custom',
       invoice_no,
       amount,
-      qr_payload: `${PAYMENT_BASE_URL}/pay/${invoice_no}`,
+      qr_payload: qrPayload,
       expires_at: expiresAt
     });
   } catch (err) {
@@ -180,11 +185,8 @@ router.post('/stk-push', async (req, res) => {
     if (!invoice_no || !phone) {
       return res.status(400).json({ error: 'invoice_no and phone are required' });
     }
-    if (!CALLBACK_URL || !CALLBACK_URL.startsWith('https://')) {
-      return res.status(500).json({
-        error: 'MPESA_CALLBACK_URL must be a public HTTPS URL',
-        current: CALLBACK_URL || null
-      });
+    if (!CALLBACK_URL) {
+      return res.status(500).json({ error: 'MPESA_CALLBACK_URL is not configured' });
     }
 
     const session = await db.getAsync(
@@ -344,14 +346,13 @@ router.get('/pay/:invoice_no', async (req, res) => {
 
 // ==================== CONFIG CHECK ====================
 router.get('/mpesa/status', (req, res) => {
-  const configured = !!(CONSUMER_KEY && CONSUMER_SECRET && PASSKEY && SHORTCODE);
+  const configured = !!(CONSUMER_KEY && CONSUMER_SECRET && PASSKEY && SHORTCODE && CALLBACK_URL);
   res.json({
     configured,
     env: process.env.MPESA_ENV || 'sandbox',
     shortcode: SHORTCODE,
-    callback_url: CALLBACK_URL || null,
-    payment_base_url: PAYMENT_BASE_URL || null,
-    callback_is_https: !!(CALLBACK_URL && CALLBACK_URL.startsWith('https://'))
+    callback: CALLBACK_URL || null,
+    paymentBase: PAYMENT_BASE_URL || null
   });
 });
 
