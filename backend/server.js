@@ -17,17 +17,21 @@ const usersRoutes = require('./routes/users');
 const noticesRoutes = require('./routes/notices');
 const customersRoutes = require('./routes/customers');
 const suppliersRoutes = require('./routes/suppliers');
-const paymentsRoutes = require('./routes/payments');   // ← NEW
+const paymentsRoutes = require('./routes/payments');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+app.set('trust proxy', 1);
 
 app.use(cors({
   origin: [
     'http://localhost:5173',
     'http://localhost:3000',
     'http://192.168.112.120:5173',
-    'http://192.168.60.29:3000'
+    'http://192.168.60.29:3000',
+    'https://evopay-carwash-pos.onrender.com',
+    'https://evopay-carwash-api.onrender.com',
   ],
   credentials: true,
 }));
@@ -47,7 +51,7 @@ app.use('/api/users', usersRoutes);
 app.use('/api/notices', noticesRoutes);
 app.use('/api/customers', customersRoutes);
 app.use('/api/suppliers', suppliersRoutes);
-app.use('/api/pay', paymentsRoutes);                    // ← NEW
+app.use('/api/pay', paymentsRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({
@@ -58,9 +62,6 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// ============================================
-// VSCU STATUS ENDPOINT
-// ============================================
 app.get('/api/vscu/status', async (req, res) => {
   try {
     const vscuClient = require('./services/vscuClient');
@@ -71,18 +72,9 @@ app.get('/api/vscu/status', async (req, res) => {
   }
 });
 
-// ============================================
-// VSCU INITIALIZATION PROXY ENDPOINT
-// ============================================
 app.post('/api/initializer/selectInitInfo', async (req, res) => {
   try {
     const vscuUrl = process.env.VSCU_URL || 'http://192.168.60.29:8090';
-
-    console.log('Initializing VSCU with:', {
-      url: `${vscuUrl}/initializer/selectInitInfo`,
-      body: req.body
-    });
-
     const response = await axios.post(
       `${vscuUrl}/initializer/selectInitInfo`,
       req.body,
@@ -95,26 +87,16 @@ app.post('/api/initializer/selectInitInfo', async (req, res) => {
         timeout: 30000
       }
     );
-
-    console.log('Init response:', response.data);
     res.json(response.data);
   } catch (error) {
-    console.error('Init error:', error.message);
-
-    let errorMessage = 'VSCU not reachable. Make sure it is running on port 8090.';
+    let errorMessage = 'VSCU not reachable.';
     let statusCode = 500;
-
-    if (error.code === 'ECONNREFUSED') {
-      errorMessage = 'VSCU not reachable. Make sure it is running on port 8090.';
-    } else if (error.code === 'ECONNRESET' || error.message === 'socket hang up') {
-      errorMessage = 'VSCU crashed or closed the connection. Check the VSCU terminal for errors.';
-    } else if (error.response) {
-      errorMessage = error.response.data?.resultMsg || error.response.data?.message || 'VSCU returned an error';
+    if (error.code === 'ECONNREFUSED') errorMessage = 'VSCU not reachable.';
+    else if (error.code === 'ECONNRESET') errorMessage = 'VSCU crashed.';
+    else if (error.response) {
+      errorMessage = error.response.data?.resultMsg || 'VSCU error';
       statusCode = error.response.status;
-    } else if (error.request) {
-      errorMessage = 'No response from VSCU. Make sure it is running.';
-    }
-
+    } else if (error.request) errorMessage = 'No response from VSCU.';
     res.status(statusCode).json({
       error: errorMessage,
       details: error.message,
@@ -123,9 +105,6 @@ app.post('/api/initializer/selectInitInfo', async (req, res) => {
   }
 });
 
-// ============================================
-// SYNC PROCESSING
-// ============================================
 const db = require('./db');
 const vscuClient = require('./services/vscuClient');
 
@@ -151,8 +130,6 @@ async function processManualSync() {
       return { synced: 0, failed: 0, message: 'No pending items' };
     }
 
-    console.log(`Manual sync: Processing ${pending.length} payloads...`);
-
     let synced = 0;
     let failed = 0;
 
@@ -161,21 +138,14 @@ async function processManualSync() {
         const payload = JSON.parse(item.payload);
         let response = null;
 
-        if (item.endpoint === '/trnsSales/saveSales') {
-          response = await vscuClient.sendSale(payload);
-        } else if (item.endpoint === '/items/saveItems') {
-          response = await vscuClient.saveItem(payload);
-        } else if (item.endpoint === '/items/saveItemComposition') {
-          response = await vscuClient.sendComposition(payload);
-        } else if (item.endpoint === '/stock/saveStockItems') {
-          response = await vscuClient.saveStock(payload);
-        } else if (item.endpoint === '/purchases/savePurchases') {
-          response = await vscuClient.savePurchase(payload);
-        } else if (item.endpoint === '/branches/saveBrancheCustomers') {
-          response = await vscuClient.saveBranchCustomer(payload);
-        } else if (item.endpoint === '/branches/saveBrancheUsers') {
-          response = await vscuClient.saveBranchUser(payload);
-        } else {
+        if (item.endpoint === '/trnsSales/saveSales') response = await vscuClient.sendSale(payload);
+        else if (item.endpoint === '/items/saveItems') response = await vscuClient.saveItem(payload);
+        else if (item.endpoint === '/items/saveItemComposition') response = await vscuClient.sendComposition(payload);
+        else if (item.endpoint === '/stock/saveStockItems') response = await vscuClient.saveStock(payload);
+        else if (item.endpoint === '/purchases/savePurchases') response = await vscuClient.savePurchase(payload);
+        else if (item.endpoint === '/branches/saveBrancheCustomers') response = await vscuClient.saveBranchCustomer(payload);
+        else if (item.endpoint === '/branches/saveBrancheUsers') response = await vscuClient.saveBranchUser(payload);
+        else {
           await db.runAsync(
             `UPDATE sync_queue SET retry_count = retry_count + 1, error = ?, last_attempt = CURRENT_TIMESTAMP WHERE id = ?`,
             ['Unknown endpoint: ' + item.endpoint, item.id]
@@ -187,7 +157,6 @@ async function processManualSync() {
         if (response && (response.resultCd === '000' || response.resultCd === '00')) {
           await db.runAsync(`DELETE FROM sync_queue WHERE id = ?`, [item.id]);
           synced++;
-          console.log(`Synced item ${item.id} (${item.endpoint})`);
         } else {
           const errorMsg = response?.resultMsg || response?.message || 'Unknown error';
           await db.runAsync(
@@ -197,7 +166,6 @@ async function processManualSync() {
           failed++;
         }
       } catch (itemError) {
-        console.error('Manual sync item error:', itemError.message);
         await db.runAsync(
           `UPDATE sync_queue SET retry_count = retry_count + 1, error = ?, last_attempt = CURRENT_TIMESTAMP WHERE id = ?`,
           [itemError.message, item.id]
@@ -206,12 +174,8 @@ async function processManualSync() {
       }
     }
 
-    console.log(`Manual sync: ${synced} synced, ${failed} failed`);
-
     return { synced, failed, message: `Synced ${synced}, failed ${failed}` };
-
   } catch (error) {
-    console.error('Manual sync error:', error.message);
     return { synced: 0, failed: 0, message: error.message };
   } finally {
     isAutoSyncing = false;
@@ -220,37 +184,24 @@ async function processManualSync() {
 
 app._manualSync = processManualSync;
 
-// ============================================
-// START SERVER WITH DATABASE CONNECTION
-// ============================================
 const { connectDB } = require('./db');
 
 connectDB().then(() => {
-  const server = app.listen(PORT, () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
     console.log('─────────────────────────────────────────');
     console.log('  Evopay Car Wash POS API');
-    console.log(`  Ready at http://localhost:${PORT}/api`);
-    console.log(`  VSCU target: ${process.env.VSCU_URL || 'http://192.168.60.29:8090'}`);
+    console.log(`  Listening on 0.0.0.0:${PORT}`);
+    console.log(`  VSCU target: ${process.env.VSCU_URL || 'not set'}`);
     console.log(`  M-Pesa env: ${process.env.MPESA_ENV || 'sandbox'}`);
     console.log('─────────────────────────────────────────');
   });
 
   process.on('SIGTERM', () => {
-    console.log('Shutting down...');
-    server.close(() => {
-      console.log('Server closed.');
-      process.exit(0);
-    });
+    server.close(() => process.exit(0));
   });
-
   process.on('SIGINT', () => {
-    console.log('Shutting down...');
-    server.close(() => {
-      console.log('Server closed.');
-      process.exit(0);
-    });
+    server.close(() => process.exit(0));
   });
-
 }).catch(err => {
   console.error('Failed to connect to database:', err.message);
   process.exit(1);
