@@ -67,6 +67,14 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+app.get('/', (req, res) => {
+  res.json({
+    service: 'Evopay Car Wash POS API',
+    status: 'running',
+    docs: '/api/health'
+  });
+});
+
 app.get('/api/vscu/status', async (req, res) => {
   try {
     const vscuClient = require('./services/vscuClient');

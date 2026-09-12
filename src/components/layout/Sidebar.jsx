@@ -119,21 +119,21 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }) => {
     <>
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
       <aside
-        className={`fixed md:static inset-y-0 left-0 z-50 w-55 bg-[#1a2a4a] text-white flex flex-col transition-transform duration-300 ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+        className={`fixed lg:static inset-y-0 left-0 z-50 w-64 sm:w-60 lg:w-55 bg-[#1a2a4a] text-white flex flex-col transition-transform duration-300 ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
       >
         {/* Mobile close only */}
-        <div className="flex items-center justify-end px-4 h-14 md:h-16 border-b border-white/10">
+        <div className="flex items-center justify-end px-4 h-14 lg:h-16 border-b border-white/10">
           <button
             onClick={() => setSidebarOpen(false)}
-            className="md:hidden text-white/60 hover:text-white transition"
+            className="lg:hidden text-white/60 hover:text-white transition"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />

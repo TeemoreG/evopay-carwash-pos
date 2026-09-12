@@ -245,16 +245,16 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] text-slate-800 p-4 sm:p-6 space-y-5">
+    <div className="min-h-screen bg-[#f8fafc] text-slate-800 p-3 sm:p-4 lg:p-6 space-y-4 sm:space-y-5">
 
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 sm:gap-4 bg-white p-4 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
         <div>
-          <h1 className="text-2xl font-bold text-[#1a2a4a]">Car Wash Dashboard</h1>
-          <p className="text-slate-500 text-sm mt-0.5">Live overview of your wash business</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-[#1a2a4a]">Evopark Car Wash Dashboard</h1>
+          <p className="text-slate-500 text-xs sm:text-sm mt-0.5">Live overview of your wash business</p>
         </div>
-        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-          <div className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border ${
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full md:w-auto">
+          <div className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium border ${
             stats.growthRate > 0 ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
             : stats.growthRate < 0 ? 'bg-rose-50 text-rose-700 border-rose-200'
             : 'bg-slate-50 text-slate-600 border-slate-200'
@@ -266,23 +266,23 @@ const Dashboard = () => {
           <button
             onClick={() => { fetchDashboardData(); checkVSCU(); }}
             disabled={refreshing}
-            className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg border border-slate-200/60 disabled:opacity-50"
+            className="flex items-center gap-2 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg border border-slate-200/60 disabled:opacity-50"
           >
             <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
             <span className="hidden sm:inline">Refresh</span>
           </button>
-          <div className="text-sm text-slate-600 bg-slate-50 px-3 py-2 rounded-lg border border-slate-200 font-medium flex items-center gap-1.5">
+          <div className="text-xs sm:text-sm text-slate-600 bg-slate-50 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg border border-slate-200 font-medium flex items-center gap-1.5">
             <Calendar className="w-4 h-4" />
-            {todayFormatted}
+            <span className="truncate max-w-[140px] sm:max-w-none">{todayFormatted}</span>
           </div>
         </div>
       </div>
 
       {/* Hero Stats - POS-focused */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm hover:shadow-md transition">
-          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Today's Revenue</p>
-          <h3 className="text-2xl font-extrabold text-[#1a2a4a] mt-1">
+      <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm hover:shadow-md transition">
+          <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-wider text-slate-400">Today's Revenue</p>
+          <h3 className="text-xl sm:text-2xl font-extrabold text-[#1a2a4a] mt-1 break-words">
             KES {stats.todayRevenue.toLocaleString()}
           </h3>
           <div className="mt-3 text-xs text-slate-500">
@@ -290,13 +290,13 @@ const Dashboard = () => {
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm hover:shadow-md transition">
+        <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm hover:shadow-md transition">
           <div className="flex justify-between items-start">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Today's Washes</p>
-              <h3 className="text-2xl font-extrabold text-[#1a2a4a] mt-1">{stats.todaySales}</h3>
+            <div className="min-w-0">
+              <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-wider text-slate-400">Today's Washes</p>
+              <h3 className="text-xl sm:text-2xl font-extrabold text-[#1a2a4a] mt-1">{stats.todaySales}</h3>
             </div>
-            <div className="p-2.5 bg-linear-to-br from-orange-50 to-orange-100/50 text-[#f47b20] rounded-lg">
+            <div className="p-2 sm:p-2.5 bg-linear-to-br from-orange-50 to-orange-100/50 text-[#f47b20] rounded-lg shrink-0">
               <Car className="w-5 h-5" />
             </div>
           </div>
@@ -306,17 +306,17 @@ const Dashboard = () => {
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm hover:shadow-md transition">
+        <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm hover:shadow-md transition">
           <div className="flex justify-between items-start">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Revenue / Car</p>
-              <h3 className="text-2xl font-extrabold text-[#1a2a4a] mt-1">
+            <div className="min-w-0">
+              <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-wider text-slate-400">Revenue / Car</p>
+              <h3 className="text-xl sm:text-2xl font-extrabold text-[#1a2a4a] mt-1 break-words">
                 KES {stats.revenuePerCar.toLocaleString()}
               </h3>
             </div>
-            <div className="p-2.5 bg-linear-to-br from-emerald-50 to-emerald-100/50 text-emerald-600 rounded-lg">
-  <TrendingUp className="w-5 h-5" />
-</div>
+            <div className="p-2 sm:p-2.5 bg-linear-to-br from-emerald-50 to-emerald-100/50 text-emerald-600 rounded-lg shrink-0">
+              <TrendingUp className="w-5 h-5" />
+            </div>
           </div>
           <div className="mt-3 flex items-center gap-1 text-xs text-slate-500">
             <Timer className="w-3 h-3" />
@@ -324,21 +324,21 @@ const Dashboard = () => {
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm hover:shadow-md transition">
+        <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm hover:shadow-md transition">
           <div className="flex justify-between items-start">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Pending Sync</p>
-              <h3 className={`text-2xl font-extrabold mt-1 ${stats.pendingSales > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+            <div className="min-w-0">
+              <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-wider text-slate-400">Pending Sync</p>
+              <h3 className={`text-xl sm:text-2xl font-extrabold mt-1 ${stats.pendingSales > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
                 {stats.pendingSales}
               </h3>
             </div>
-            <div className={`p-2.5 rounded-lg ${stats.pendingSales > 0 ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'}`}>
+            <div className={`p-2 sm:p-2.5 rounded-lg shrink-0 ${stats.pendingSales > 0 ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'}`}>
               <AlertTriangle className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-3 flex items-center justify-between text-xs">
-            <span className="text-slate-500">{oldestPending ? `Oldest: ${oldestPending}` : 'All synced'}</span>
-            <button onClick={() => navigate('/sales')} className="text-[#f47b20] font-semibold hover:underline flex items-center gap-0.5">
+            <span className="text-slate-500 truncate">{oldestPending ? `Oldest: ${oldestPending}` : 'All synced'}</span>
+            <button onClick={() => navigate('/sales')} className="text-[#f47b20] font-semibold hover:underline flex items-center gap-0.5 shrink-0 ml-2">
               Resolve <ArrowUpRight className="w-3 h-3" />
             </button>
           </div>
@@ -346,24 +346,24 @@ const Dashboard = () => {
       </div>
 
       {/* Main Analytics */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5">
 
         {/* Revenue Trend */}
-        <div className="lg:col-span-2 bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm">
-          <div className="flex justify-between items-center mb-4">
+        <div className="lg:col-span-2 bg-white p-4 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
             <div>
-              <h2 className="text-base font-bold text-[#1a2a4a] flex items-center gap-2">
+              <h2 className="text-sm sm:text-base font-bold text-[#1a2a4a] flex items-center gap-2">
                 <BarChart3 className="w-4 h-4 text-[#f47b20]" />
                 Revenue Trend
               </h2>
               <p className="text-xs text-slate-400">Daily revenue and wash count</p>
             </div>
-            <div className="flex bg-slate-100 rounded-lg p-0.5">
+            <div className="flex bg-slate-100 rounded-lg p-0.5 self-start sm:self-auto">
               {['7d', '30d', '90d'].map(r => (
                 <button
                   key={r}
                   onClick={() => { setTimeRange(r); setTimeout(fetchDashboardData, 0); }}
-                  className={`px-3 py-1 text-xs font-medium rounded-md transition ${
+                  className={`px-2.5 sm:px-3 py-1 text-xs font-medium rounded-md transition ${
                     timeRange === r ? 'bg-white text-[#1a2a4a] shadow-sm' : 'text-slate-500 hover:text-slate-700'
                   }`}
                 >
@@ -373,17 +373,17 @@ const Dashboard = () => {
             </div>
           </div>
 
-          <div className="h-64 w-full">
+          <div className="h-56 sm:h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+              <ComposedChart data={chartData} margin={{ top: 10, right: 5, left: -15, bottom: 0 }}>
                 <defs>
                   <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#f47b20" stopOpacity={0.25} />
                     <stop offset="95%" stopColor="#f47b20" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <XAxis dataKey="date" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
-                <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false}
+                <XAxis dataKey="date" stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} />
+                <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false}
                   tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
                 <Tooltip content={<TrendTooltip />} />
                 <Area type="monotone" dataKey="revenue" stroke="#f47b20" strokeWidth={2.5} fillOpacity={1} fill="url(#colorRev)" name="Revenue" />
@@ -405,11 +405,11 @@ const Dashboard = () => {
         </div>
 
         {/* Right column */}
-        <div className="space-y-5">
+        <div className="space-y-4 sm:space-y-5">
 
           {/* Payment Methods */}
-          <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm">
-            <h2 className="text-base font-bold text-[#1a2a4a] flex items-center gap-2 mb-3">
+          <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
+            <h2 className="text-sm sm:text-base font-bold text-[#1a2a4a] flex items-center gap-2 mb-3">
               <PieChartIcon className="w-4 h-4 text-[#f47b20]" />
               Payment Methods
             </h2>
@@ -433,8 +433,8 @@ const Dashboard = () => {
           </div>
 
           {/* Business Health */}
-          <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm">
-            <h2 className="text-base font-bold text-[#1a2a4a] flex items-center gap-2 mb-4">
+          <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
+            <h2 className="text-sm sm:text-base font-bold text-[#1a2a4a] flex items-center gap-2 mb-4">
               <Activity className="w-4 h-4 text-[#f47b20]" />
               Business Health
             </h2>
@@ -479,13 +479,13 @@ const Dashboard = () => {
       </div>
 
       {/* Recent + Top Services */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5">
 
         {/* Recent */}
-        <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200/80 shadow-sm p-5">
+        <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200/80 shadow-sm p-4 sm:p-5">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-5">
             <div>
-              <h2 className="text-base font-bold text-[#1a2a4a] flex items-center gap-2">
+              <h2 className="text-sm sm:text-base font-bold text-[#1a2a4a] flex items-center gap-2">
                 <Clock className="w-4 h-4 text-[#f47b20]" />
                 Recent Washes
               </h2>
@@ -506,12 +506,12 @@ const Dashboard = () => {
         </div>
 
         {/* Right: Top Services + Quick Actions */}
-        <div className="space-y-5">
+        <div className="space-y-4 sm:space-y-5">
 
-          <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-5">
+          <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-4 sm:p-5">
             <div className="flex justify-between items-center mb-4">
               <div>
-                <h2 className="text-base font-bold text-[#1a2a4a] flex items-center gap-2">
+                <h2 className="text-sm sm:text-base font-bold text-[#1a2a4a] flex items-center gap-2">
                   <Award className="w-4 h-4 text-[#f47b20]" />
                   Top Services
                 </h2>
@@ -552,8 +552,8 @@ const Dashboard = () => {
             )}
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-5">
-            <h2 className="text-base font-bold text-[#1a2a4a] mb-3 flex items-center gap-2">
+          <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-4 sm:p-5">
+            <h2 className="text-sm sm:text-base font-bold text-[#1a2a4a] mb-3 flex items-center gap-2">
               <Zap className="w-4 h-4 text-[#f47b20]" />
               Quick Actions
             </h2>
@@ -576,7 +576,7 @@ const Dashboard = () => {
       </div>
 
       {/* Footer */}
-      <div className="flex flex-col sm:flex-row justify-between items-center pt-4 border-t border-slate-200 text-xs text-slate-400 gap-2">
+      <div className="flex flex-col sm:flex-row justify-between items-center pt-4 border-t border-slate-200 text-xs text-slate-400 gap-2 text-center sm:text-left">
         <span>Last Updated: <strong className="text-slate-600">{lastUpdated || 'Initializing...'}</strong></span>
         <span className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-emerald-500"></span>

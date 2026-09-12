@@ -62,10 +62,10 @@ const SalesHistory = ({ sales, loading, onRetry, onDownloadReceipt }) => {
   const totalPending = sales.filter(s => s.synced === 0 || s.status === 'Pending').length;
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-4">
+    <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-3 sm:p-4">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
-        <h2 className="text-lg font-bold text-[#1a2a4a]">Sales History</h2>
-        <div className="flex flex-wrap items-center gap-3 text-xs">
+        <h2 className="text-base sm:text-lg font-bold text-[#1a2a4a]">Sales History</h2>
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs">
           <span className="text-slate-500 font-medium">Total: <span className="text-[#1a2a4a] font-bold">{sales.length}</span></span>
           <div className="h-4 w-px bg-slate-200"></div>
           <span className="text-emerald-600 font-medium">✓ {totalSynced} synced</span>
@@ -78,8 +78,8 @@ const SalesHistory = ({ sales, loading, onRetry, onDownloadReceipt }) => {
         </div>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+      <div className="overflow-x-auto -mx-3 sm:mx-0 px-3 sm:px-0">
+        <table className="w-full text-sm min-w-[640px]">
           <thead>
             <tr className="text-left text-slate-500 border-b border-slate-200">
               <th className="pb-2.5 font-semibold text-[10px] uppercase tracking-wider">Invoice</th>
@@ -88,7 +88,7 @@ const SalesHistory = ({ sales, loading, onRetry, onDownloadReceipt }) => {
               <th className="pb-2.5 font-semibold text-[10px] uppercase tracking-wider hidden md:table-cell">Receipt</th>
               <th className="pb-2.5 font-semibold text-[10px] uppercase tracking-wider text-right">Amount</th>
               <th className="pb-2.5 font-semibold text-[10px] uppercase tracking-wider text-right hidden sm:table-cell">Tax</th>
-              <th className="pb-2.5 font-semibold text-[10px] uppercase tracking-wider text-center hidden lg:table-cell">Date &amp; Time</th>
+              <th className="pb-2.5 font-semibold text-[10px] uppercase tracking-wider text-center">Date &amp; Time</th>
               <th className="pb-2.5 font-semibold text-[10px] uppercase tracking-wider text-center">Status</th>
               <th className="pb-2.5 font-semibold text-[10px] uppercase tracking-wider text-center">Sync</th>
               <th className="pb-2.5 font-semibold text-[10px] uppercase tracking-wider text-center">Receipt</th>
@@ -101,31 +101,31 @@ const SalesHistory = ({ sales, loading, onRetry, onDownloadReceipt }) => {
               </tr>
             ) : currentSales.map((sale, index) => (
               <tr key={sale.id || index} className="border-b border-slate-100 hover:bg-slate-50 transition">
-                <td className="py-2.5 font-mono text-xs font-semibold text-[#1a2a4a]">
+                <td className="py-2.5 font-mono text-xs font-semibold text-[#1a2a4a] whitespace-nowrap">
                   {sale.invoice_no || sale.invoiceNo || 'N/A'}
                 </td>
                 <td className="py-2.5 text-slate-700 max-w-30 truncate text-sm">
                   {sale.customer || 'Walk-in Customer'}
                 </td>
-                <td className="py-2.5 text-slate-500 hidden sm:table-cell text-sm">
+                <td className="py-2.5 text-slate-500 hidden sm:table-cell text-sm whitespace-nowrap">
                   {sale.cashier || 'Unknown'}
                 </td>
                 <td className="py-2.5 hidden md:table-cell">
-                  <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
+                  <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full whitespace-nowrap">
                     {getReceiptTypeLabel(sale.receipt_type || sale.rcptTyCd)}
                   </span>
                 </td>
-                <td className="py-2.5 font-semibold text-[#1a2a4a] text-right text-sm">
+                <td className="py-2.5 font-semibold text-[#1a2a4a] text-right text-sm whitespace-nowrap">
                   KES {(sale.total || 0).toLocaleString()}
                 </td>
-                <td className="py-2.5 text-[#f47b20] text-right hidden sm:table-cell text-sm">
+                <td className="py-2.5 text-[#f47b20] text-right hidden sm:table-cell text-sm whitespace-nowrap">
                   KES {(sale.tax || 0).toLocaleString()}
                 </td>
-                <td className="py-2.5 text-slate-500 hidden lg:table-cell text-center text-xs">
+                <td className="py-2.5 text-slate-500 text-center text-xs whitespace-nowrap">
                   {fmtTs(sale)}
                 </td>
                 <td className="py-2.5 text-center">
-                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-semibold ${getStatusColor(sale.status)}`}>
+                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-semibold whitespace-nowrap ${getStatusColor(sale.status)}`}>
                     {sale.status || 'N/A'}
                   </span>
                 </td>
@@ -159,9 +159,9 @@ const SalesHistory = ({ sales, loading, onRetry, onDownloadReceipt }) => {
       {totalPages > 1 && (
         <div className="flex flex-wrap items-center justify-between gap-2 mt-4 pt-4 border-t border-slate-200">
           <span className="text-xs text-slate-500">Page {currentPage} of {totalPages}</span>
-          <div className="flex gap-1">
+          <div className="flex gap-1 flex-wrap">
             <button onClick={() => goToPage(currentPage - 1)} disabled={currentPage === 1}
-              className="px-3 py-1 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition">
+              className="px-2.5 sm:px-3 py-1 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition">
               ←
             </button>
             {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
@@ -172,7 +172,7 @@ const SalesHistory = ({ sales, loading, onRetry, onDownloadReceipt }) => {
               else pageNum = currentPage - 2 + i;
               return (
                 <button key={pageNum} onClick={() => goToPage(pageNum)}
-                  className={`px-3 py-1 text-sm border rounded-lg transition ${
+                  className={`px-2.5 sm:px-3 py-1 text-sm border rounded-lg transition ${
                     currentPage === pageNum ? 'bg-[#f47b20] text-white border-[#f47b20]' : 'border-slate-300 hover:bg-slate-50'
                   }`}>
                   {pageNum}
@@ -180,7 +180,7 @@ const SalesHistory = ({ sales, loading, onRetry, onDownloadReceipt }) => {
               );
             })}
             <button onClick={() => goToPage(currentPage + 1)} disabled={currentPage === totalPages}
-              className="px-3 py-1 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition">
+              className="px-2.5 sm:px-3 py-1 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition">
               →
             </button>
           </div>
