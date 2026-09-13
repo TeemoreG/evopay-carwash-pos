@@ -42,27 +42,26 @@ router.post('/selectItems', async (req, res) => {
 
     console.log('Response Code:', response.data?.resultCd);
 
-    // Save items to database (preserve category/item_type if exists)
     if (response.data?.resultCd === '000' && response.data?.data?.itemList) {
       const items = response.data.data.itemList;
       let saved = 0;
 
       for (const item of items) {
         try {
-          // Check if item already exists (to preserve category)
           const existing = await db.getAsync(
-            `SELECT category FROM items WHERE item_cd = ?`,
+            `SELECT category, image_url FROM items WHERE item_cd = ?`,
             [item.itemCd]
           );
 
           const category = existing?.category || deriveCategoryFromName(item.itemNm);
+          const imageUrl = existing?.image_url || null;
 
           await db.runAsync(
             `INSERT OR REPLACE INTO items 
              (item_cd, item_name, item_std_nm, item_cls_cd, item_ty_cd, price, tax_type, stock, sfty_qty,
               orgn_nat_cd, pkg_unit_cd, qty_unit_cd, use_yn, isrc_aplcb_yn, btch_no, bcd, add_info,
-              category, item_type, synced, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+              category, item_type, image_url, synced, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
             [
               item.itemCd,
               item.itemNm,
@@ -83,6 +82,7 @@ router.post('/selectItems', async (req, res) => {
               item.addInfo || null,
               category,
               item.itemTyCd === '2' ? 'service' : 'product',
+              imageUrl,
               new Date().toISOString(),
               new Date().toISOString()
             ]
@@ -275,11 +275,10 @@ const deriveCategoryFromName = (name) => {
 // LOCAL ITEM ROUTES
 // ============================================
 
-// Get all items (optionally filter by item_type)
 router.get('/', async (req, res) => {
   try {
     const { type, category } = req.query;
-    
+
     let query = `SELECT * FROM items WHERE use_yn = 'Y'`;
     const params = [];
 
@@ -304,7 +303,7 @@ router.get('/', async (req, res) => {
 });
 
 // ============================================
-// ITEM COMPOSITION ROUTES (kept for KRA compatibility)
+// ITEM COMPOSITION ROUTES
 // ============================================
 router.get('/:itemCd/compositions', async (req, res) => {
   try {
@@ -331,7 +330,6 @@ router.get('/:itemCd/compositions', async (req, res) => {
   }
 });
 
-// Save composition (kept for KRA compatibility)
 router.post('/:itemCd/compositions', async (req, res) => {
   try {
     const { itemCd } = req.params;
@@ -459,7 +457,6 @@ router.post('/', async (req, res) => {
     const itemCode = item.itemCd || item.item_cd;
     const vscuPayload = mapItemToVSCU(item);
 
-    // Determine item_type and category
     const itemTypeCd = item.itemTyCd || item.item_ty_cd || '2';
     const itemType = itemTypeCd === '2' ? 'service' : 'product';
     const category = item.category || deriveCategoryFromName(item.itemNm || item.item_name);
@@ -471,8 +468,8 @@ router.post('/', async (req, res) => {
       `INSERT OR REPLACE INTO items 
        (item_cd, item_name, item_std_nm, item_cls_cd, item_ty_cd, price, tax_type, stock, sfty_qty,
         orgn_nat_cd, pkg_unit_cd, qty_unit_cd, use_yn, isrc_aplcb_yn, btch_no, bcd, add_info,
-        category, item_type, synced, sync_error, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
+        category, item_type, image_url, synced, sync_error, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
       [
         itemCode,
         item.itemNm || item.item_name,
@@ -493,6 +490,7 @@ router.post('/', async (req, res) => {
         item.addInfo || item.add_info || null,
         category,
         itemType,
+        item.image_url || null,
         null,
         now,
         now
@@ -670,8 +668,8 @@ router.post('/bulk', async (req, res) => {
         await db.runAsync(
           `INSERT OR REPLACE INTO items 
            (item_cd, item_name, item_cls_cd, item_ty_cd, price, tax_type, stock, sfty_qty, 
-            orgn_nat_cd, pkg_unit_cd, qty_unit_cd, use_yn, category, item_type, synced, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+            orgn_nat_cd, pkg_unit_cd, qty_unit_cd, use_yn, category, item_type, image_url, synced, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
           [
             item.itemCd,
             item.itemNm,
@@ -687,6 +685,7 @@ router.post('/bulk', async (req, res) => {
             item.useYn || 'Y',
             category,
             itemType,
+            item.image_url || null,
             now, now
           ]
         );

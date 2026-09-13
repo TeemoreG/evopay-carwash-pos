@@ -22,6 +22,14 @@ const PRODUCT_CATEGORIES = [
 const SERVICE_PRESETS = [800, 1000, 1200, 1500, 2000, 2500, 3000, 4000, 5000];
 const PRODUCT_PRESETS = [50, 100, 150, 200, 250, 300, 500, 800, 1000];
 
+// Build a Cloudinary thumbnail URL (200x200 square crop).
+// Works with any Cloudinary URL; falls back to the original if not Cloudinary.
+const toThumb = (url) => {
+  if (!url) return '';
+  if (!url.includes('res.cloudinary.com')) return url;
+  return url.replace('/upload/', '/upload/w_200,h_200,c_fill/');
+};
+
 const AddItemForm = ({ item, onSave, onCancel, isSaving, mode = 'service' }) => {
   const { user } = useAuth();
   const isEditing = !!item;
@@ -45,6 +53,7 @@ const AddItemForm = ({ item, onSave, onCancel, isSaving, mode = 'service' }) => 
     bcd: '',
     addInfo: '',
     category: isProduct ? 'detergent' : 'basic',
+    image_url: '',
   });
 
   useEffect(() => {
@@ -66,8 +75,9 @@ const AddItemForm = ({ item, onSave, onCancel, isSaving, mode = 'service' }) => 
         useYn: item.useYn || item.use_yn || 'Y',
         isrcAplcbYn: item.isrcAplcbYn || item.isrc_aplcb_yn || 'N',
         bcd: item.bcd || '',
-        addInfo: item.addInfo || '',
+        addInfo: item.addInfo || item.add_info || '',
         category: item.category || (itemIsProduct ? 'detergent' : 'basic'),
+        image_url: item.image_url || '',
       });
     }
   }, [item]);
@@ -120,6 +130,7 @@ const AddItemForm = ({ item, onSave, onCancel, isSaving, mode = 'service' }) => 
       item_type: isProduct ? 'product' : 'service',
       category: formData.category,
       stock: isProduct ? (parseInt(formData.stock) || 0) : 0,
+      image_url: formData.image_url.trim() || null,
     };
 
     onSave(payload);
@@ -185,6 +196,41 @@ const AddItemForm = ({ item, onSave, onCancel, isSaving, mode = 'service' }) => 
           />
         </div>
 
+        {/* Image URL + Preview */}
+        <div className="md:col-span-3">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Image URL</label>
+          <div className="flex gap-3 items-start">
+            <input
+              type="url"
+              name="image_url"
+              value={formData.image_url}
+              onChange={handleChange}
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f47b20] focus:border-transparent text-sm font-mono"
+              placeholder="https://res.cloudinary.com/dvqjgbdhp/image/upload/..."
+            />
+            <div className="w-20 h-20 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden bg-gray-50 shrink-0">
+              {formData.image_url ? (
+                <img
+                  src={toThumb(formData.image_url)}
+                  alt="Preview"
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    e.target.parentNode.innerHTML = '<span class="text-[10px] text-gray-400 text-center px-1">Invalid URL</span>';
+                  }}
+                />
+              ) : (
+                <svg className="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              )}
+            </div>
+          </div>
+          <p className="text-xs text-gray-400 mt-1">
+            Paste a Cloudinary URL. It will be auto-cropped to a square thumbnail for the POS grid.
+          </p>
+        </div>
+
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
           <select
@@ -232,7 +278,6 @@ const AddItemForm = ({ item, onSave, onCancel, isSaving, mode = 'service' }) => 
           </div>
         </div>
 
-        {/* Duration (services) OR Stock (products) */}
         {isProduct ? (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Stock</label>
