@@ -67,7 +67,7 @@ const Login = () => {
               parent.appendChild(fallback);
             }}
           />
-          <h1 className="text-2xl font-bold text-[#1a2a4a] mt-4">VSCU Cashier</h1>
+          <h1 className="text-2xl font-bold text-[#1a2a4a] mt-4">Car Wash POS</h1>
           <p className="text-gray-500 text-sm">Sign in to continue</p>
         </div>
 
@@ -132,7 +132,7 @@ const Login = () => {
         </form>
 
         <p className="text-xs text-gray-400 text-center mt-6">
-          Evopay VSCU Cashier System v1.0.0
+          Evopay Car wash POS System v1.0.0
         </p>
       </div>
     </div>
