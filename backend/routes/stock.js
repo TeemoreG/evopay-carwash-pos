@@ -170,14 +170,22 @@ router.post('/bulk', async (req, res) => {
     let saved = 0;
 
     for (const stock of stockList) {
+      const itemCd = stock.itemCd || stock.item_cd;
+
+      // Preserve existing image_url
+      const existing = await db.getAsync(
+        `SELECT image_url FROM items WHERE item_cd = ?`,
+        [itemCd]
+      );
+
       await db.runAsync(
         `INSERT OR REPLACE INTO items (
           item_cd, item_name, item_std_nm, item_cls_cd, item_ty_cd,
           price, tax_type, stock, sfty_qty, orgn_nat_cd, pkg_unit_cd, qty_unit_cd,
-          use_yn, isrc_aplcb_yn, bcd, add_info, item_type, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'product', ?)`,
+          use_yn, isrc_aplcb_yn, bcd, add_info, image_url, item_type, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'product', ?)`,
         [
-          stock.itemCd || stock.item_cd,
+          itemCd,
           stock.itemNm || stock.item_name || 'Unknown',
           stock.itemStdNm || stock.item_std_nm || null,
           stock.itemClsCd || stock.item_cls_cd || '50101010',
@@ -193,6 +201,7 @@ router.post('/bulk', async (req, res) => {
           stock.isrcAplcbYn || stock.isrc_aplcb_yn || 'N',
           stock.bcd || null,
           stock.addInfo || stock.add_info || null,
+          stock.image_url || existing?.image_url || null,
           now
         ]
       );
