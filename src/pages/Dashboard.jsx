@@ -250,7 +250,7 @@ const Dashboard = () => {
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 sm:gap-4 bg-white p-4 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-[#1a2a4a]">Evopark Car Wash Dashboard</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-[#1a2a4a]">Car Wash POS Dashboard</h1>
           <p className="text-slate-500 text-xs sm:text-sm mt-0.5">Live overview of your wash business</p>
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full md:w-auto">
