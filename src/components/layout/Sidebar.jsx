@@ -178,7 +178,6 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }) => {
           <div className="flex items-center justify-between px-2.5 py-1.5 bg-white/5 rounded-lg">
             <span className="text-[10px] font-medium text-white/50 uppercase tracking-wide">VSCU</span>
             <div className="flex items-center gap-1.5">
-              <span className={`w-1.5 h-1.5 rounded-full ${vscuOnline ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`}></span>
               <span className="text-[10px] font-medium text-white/70">{vscuOnline ? 'Online' : 'Offline'}</span>
             </div>
           </div>

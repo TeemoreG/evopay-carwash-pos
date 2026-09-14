@@ -21,20 +21,18 @@ const PRODUCT_CATEGORIES = [
   { id: 'other', name: 'Other' },
 ];
 
-// Insert Cloudinary transformation for square thumbnail
 const toThumb = (url) => {
-  if (!url) return '';
+  if (!url || typeof url !== 'string') return '';
   if (!url.includes('res.cloudinary.com')) return url;
   return url.replace('/upload/', '/upload/w_300,h_300,c_fill,q_auto,f_auto/');
 };
 
 const isProduct = (i) =>
-  (i.item_type || '').toLowerCase() === 'product' || String(i.item_ty_cd) === '1';
+  !!i && ((i.item_type || '').toLowerCase() === 'product' || String(i.item_ty_cd) === '1');
 
 const isService = (i) =>
-  (i.item_type || '').toLowerCase() === 'service' || String(i.item_ty_cd) === '2';
+  !!i && ((i.item_type || '').toLowerCase() === 'service' || String(i.item_ty_cd) === '2');
 
-// Colored placeholder with first letter when no image
 const Placeholder = ({ name }) => {
   const letter = (name || '?').trim().charAt(0).toUpperCase();
   return (
@@ -44,6 +42,17 @@ const Placeholder = ({ name }) => {
   );
 };
 
+// Safe getters — every one guards against undefined/null
+const getPrice    = (i) => Number(i?.price ?? i?.dftPrc ?? 0);
+const getName     = (i) => i?.item_name || i?.itemNm || 'Unnamed';
+const getDuration = (i) => Number(i?.sfty_qty ?? i?.sftyQty ?? 0);
+const getStockQty = (i) => {
+  const v = i?.stock;
+  return typeof v === 'number' && !isNaN(v) ? v : 0;
+};
+const getCd       = (i) => i?.item_cd || i?.itemCd || '';
+const getImage    = (i) => i?.image_url || '';
+
 const ServiceGrid = ({ items: itemsProp, onAdd }) => {
   const [tab, setTab] = useState('service');
   const [category, setCategory] = useState('all');
@@ -52,11 +61,11 @@ const ServiceGrid = ({ items: itemsProp, onAdd }) => {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Fetch own data if no items prop is provided
   useEffect(() => {
-    if (itemsProp && itemsProp.length) {
-      setServices(itemsProp.filter(isService));
-      setProducts(itemsProp.filter(isProduct));
+    if (Array.isArray(itemsProp) && itemsProp.length) {
+      const clean = itemsProp.filter(Boolean);
+      setServices(clean.filter(isService));
+      setProducts(clean.filter(isProduct));
       setLoading(false);
       return;
     }
@@ -67,11 +76,13 @@ const ServiceGrid = ({ items: itemsProp, onAdd }) => {
           getItems().catch(() => ({ data: [] })),
           getStock().catch(() => ({ data: [] })),
         ]);
-        const allItems = itemsRes.data || [];
-        const stockItems = stockRes.data || [];
+        const allItems = (itemsRes.data || []).filter(Boolean);
+        const stockItems = (stockRes.data || []).filter(Boolean);
 
         setServices(allItems.filter(isService));
         setProducts(stockItems.length ? stockItems : allItems.filter(isProduct));
+      } catch (e) {
+        console.error('ServiceGrid fetch error:', e);
       } finally {
         setLoading(false);
       }
@@ -86,6 +97,7 @@ const ServiceGrid = ({ items: itemsProp, onAdd }) => {
 
   const filtered = useMemo(() => {
     return activeList
+      .filter(Boolean)
       .filter(i => {
         if (tab === 'product') return true;
         return category === 'all' || (i.category || 'addon') === category;
@@ -99,13 +111,6 @@ const ServiceGrid = ({ items: itemsProp, onAdd }) => {
         );
       });
   }, [activeList, tab, category, search]);
-
-  const getPrice = (i) => Number(i.price || i.dftPrc || 0);
-  const getName = (i) => i.item_name || i.itemNm || 'Unnamed';
-  const getDuration = (i) => i.sfty_qty || i.sftyQty || 0;
-  const getStock = (i) => i.stock ?? 0;
-  const getCd = (i) => i.item_cd || i.itemCd;
-  const getImage = (i) => i.image_url || '';
 
   return (
     <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm flex flex-col h-full overflow-hidden">
@@ -152,7 +157,7 @@ const ServiceGrid = ({ items: itemsProp, onAdd }) => {
         </div>
       </div>
 
-      {/* Category chips (services only) */}
+      {/* Category chips */}
       {tab === 'service' && (
         <div className="px-2 py-2 border-b border-slate-100 shrink-0">
           <div className="flex gap-1.5 overflow-x-auto scrollbar-thin scrollbar-thumb-slate-300">
@@ -191,16 +196,18 @@ const ServiceGrid = ({ items: itemsProp, onAdd }) => {
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
             {filtered.map((item) => {
-              const stock = getStock(item);
+              if (!item) return null;
+              const stock = getStockQty(item);
               const inStock = tab === 'service' || stock > 0;
               const img = getImage(item);
               const name = getName(item);
               const price = getPrice(item);
               const duration = getDuration(item);
+              const cd = getCd(item);
 
               return (
                 <button
-                  key={getCd(item)}
+                  key={cd || name}
                   onClick={() => inStock && onAdd(item)}
                   disabled={!inStock}
                   className={`text-left rounded-lg border transition active:scale-[0.97] overflow-hidden flex flex-col ${
@@ -209,7 +216,6 @@ const ServiceGrid = ({ items: itemsProp, onAdd }) => {
                       : 'bg-white border-slate-200 hover:border-[#f47b20] hover:shadow-md'
                   }`}
                 >
-                  {/* Square image container */}
                   <div className="w-full aspect-square bg-slate-100 relative overflow-hidden">
                     {img ? (
                       <img
@@ -219,7 +225,9 @@ const ServiceGrid = ({ items: itemsProp, onAdd }) => {
                         className="w-full h-full object-cover"
                         onError={(e) => {
                           e.target.style.display = 'none';
-                          e.target.nextElementSibling?.classList?.remove('hidden');
+                          if (e.target.nextElementSibling) {
+                            e.target.nextElementSibling.classList.remove('hidden');
+                          }
                         }}
                       />
                     ) : null}
@@ -227,7 +235,6 @@ const ServiceGrid = ({ items: itemsProp, onAdd }) => {
                       <Placeholder name={name} />
                     </div>
 
-                    {/* Stock badge */}
                     {tab === 'product' && stock <= 0 && (
                       <span className="absolute top-1 right-1 bg-rose-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">
                         OUT
@@ -240,7 +247,6 @@ const ServiceGrid = ({ items: itemsProp, onAdd }) => {
                     )}
                   </div>
 
-                  {/* Info */}
                   <div className="p-2 flex flex-col gap-0.5 min-h-0">
                     <p className="text-[11px] font-semibold text-[#1a2a4a] line-clamp-2 leading-tight">
                       {name}

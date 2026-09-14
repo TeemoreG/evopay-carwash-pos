@@ -9,7 +9,7 @@ import Items from './pages/Items.jsx';
 import Sales from './pages/Sales.jsx';
 import Reports from './pages/Reports.jsx';
 import Legal from './pages/Legal.jsx';
-import Stock from './pages/Stock.jsx';
+import Products from './pages/Products.jsx';
 import Purchases from './pages/Purchases.jsx';
 import Imports from './pages/Imports.jsx';
 import DataManagement from './pages/DataManagement.jsx';
@@ -18,7 +18,7 @@ import Settings from './pages/Settings.jsx';
 import Cashiers from './pages/Cashiers.jsx';
 import Notices from './pages/Notices.jsx';
 import Customers from './pages/Customers.jsx';
-import PayPage from './pages/PayPage.jsx';   // ← NEW
+import PayPage from './pages/PayPage.jsx';
 import AdminRoute from './components/AdminRoute.jsx';
 
 const ProtectedRoute = ({ children }) => {
@@ -53,16 +53,16 @@ function App() {
       />
 
       <Routes>
-        {/* Public — no auth, no layout */}
+        {/* Public */}
         <Route path="/login" element={<Login />} />
-        <Route path="/pay/:invoice" element={<PayPage />} />   {/* ← NEW */}
+        <Route path="/pay/:invoice" element={<PayPage />} />
 
         {/* Protected */}
         <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
           <Route index element={<Dashboard />} />
           <Route path="items" element={<Items />} />
           <Route path="sales" element={<Sales />} />
-          <Route path="stock" element={<Stock />} />
+          <Route path="stock" element={<Products />} />
           <Route path="purchases" element={<Purchases />} />
           <Route path="imports" element={<Imports />} />
           <Route path="notices" element={<Notices />} />
