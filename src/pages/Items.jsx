@@ -262,7 +262,10 @@ const Items = () => {
       ]);
       
       const data = itemsRes.data || [];
-      setItems(data);
+      const servicesOnly = data.filter(Boolean).filter(
+        (i) => (i.item_type || '').toLowerCase() === 'service' || String(i.item_ty_cd) === '2'
+      );
+         setItems(servicesOnly);
       setLastUpdated(new Date().toLocaleString());
       
       if (settingsRes.data?.items_last_sync) {
