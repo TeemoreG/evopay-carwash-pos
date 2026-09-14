@@ -73,6 +73,9 @@ router.post('/', async (req, res) => {
       if (['01', '02', '03'].includes(method)) finalPaymentMethod = method;
     }
 
+    // Cash is instantly paid. Card/M-Pesa need confirmation.
+    const initialPaymentStatus = finalPaymentMethod === '01' ? 'completed' : 'pending';
+
     // ============================================
     // VALIDATE STOCK — products only
     // ============================================
@@ -179,14 +182,14 @@ router.post('/', async (req, res) => {
     };
 
     // ============================================
-    // SAVE TO DB
+    // SAVE TO DB (with payment_status)
     // ============================================
     const result = await db.runAsync(
       `INSERT INTO sales 
        (invoice_no, customer, customer_pin, cashier, subtotal, tax, total, payment_method, 
         sales_type, receipt_type, org_invoice_no, discount_type, discount_value, remarks,
-        status, synced, vscu_signature, receipt_no, date, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        status, synced, vscu_signature, receipt_no, date, created_at, payment_status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         invoiceNo,
         customer || 'Walk-in Customer',
@@ -207,7 +210,8 @@ router.post('/', async (req, res) => {
         null,
         null,
         date || now.slice(0, 10),
-        now
+        now,
+        initialPaymentStatus
       ]
     );
 
@@ -366,6 +370,7 @@ router.post('/', async (req, res) => {
       saleId,
       invoiceNo,
       paymentMethod: finalPaymentMethod,
+      paymentStatus: initialPaymentStatus,
       vscuResponse,
       signature,
       receipt: { number: receiptNo, signature, status: finalStatus },
@@ -384,16 +389,24 @@ router.post('/', async (req, res) => {
 
 // ============================================
 // GET ALL SALES
+// Default: only completed payments.
+// ?include_pending=1 → include pending/failed (admin views).
 // ============================================
 router.get('/', async (req, res) => {
   try {
-    const { start, end, status } = req.query;
+    const { start, end, status, include_pending } = req.query;
     let sql = `SELECT * FROM sales WHERE 1=1`;
     const params = [];
 
     if (start) { sql += ` AND date >= ?`; params.push(start); }
     if (end) { sql += ` AND date <= ?`; params.push(end); }
     if (status) { sql += ` AND status = ?`; params.push(status); }
+
+    // Default: hide incomplete payments
+    if (include_pending !== '1') {
+      sql += ` AND payment_status = 'completed'`;
+    }
+
     sql += ` ORDER BY date DESC, id DESC`;
 
     const rows = await db.allAsync(sql, params);
@@ -520,19 +533,31 @@ router.post('/:id/retry', async (req, res) => {
 });
 
 // ============================================
-// SALES SUMMARY
+// SALES SUMMARY — only completed payments
 // ============================================
 router.get('/stats/summary', async (req, res) => {
   try {
-    const total = await db.getAsync(`SELECT COUNT(*) as count FROM sales`);
-    const completed = await db.getAsync(`SELECT COUNT(*) as count, SUM(total) as revenue FROM sales WHERE status = 'Completed'`);
-    const pending = await db.getAsync(`SELECT COUNT(*) as count FROM sales WHERE status = 'Pending'`);
-    const taxTotal = await db.getAsync(`SELECT SUM(tax) as tax FROM sales WHERE status = 'Completed'`);
+    const total = await db.getAsync(
+      `SELECT COUNT(*) as count FROM sales WHERE payment_status = 'completed'`
+    );
+    const completed = await db.getAsync(
+      `SELECT COUNT(*) as count, SUM(total) as revenue FROM sales WHERE status = 'Completed' AND payment_status = 'completed'`
+    );
+    const pendingSync = await db.getAsync(
+      `SELECT COUNT(*) as count FROM sales WHERE status = 'Pending' AND payment_status = 'completed'`
+    );
+    const awaitingPayment = await db.getAsync(
+      `SELECT COUNT(*) as count FROM sales WHERE payment_status = 'pending'`
+    );
+    const taxTotal = await db.getAsync(
+      `SELECT SUM(tax) as tax FROM sales WHERE status = 'Completed' AND payment_status = 'completed'`
+    );
 
     res.json({
       total: total?.count || 0,
       completed: completed?.count || 0,
-      pending: pending?.count || 0,
+      pending: pendingSync?.count || 0,
+      awaitingPayment: awaitingPayment?.count || 0,
       revenue: completed?.revenue || 0,
       tax: taxTotal?.tax || 0,
     });
