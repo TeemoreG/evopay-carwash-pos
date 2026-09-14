@@ -73,7 +73,6 @@ router.post('/', async (req, res) => {
       if (['01', '02', '03'].includes(method)) finalPaymentMethod = method;
     }
 
-    // Cash is instantly paid. Card/M-Pesa need confirmation.
     const initialPaymentStatus = finalPaymentMethod === '01' ? 'completed' : 'pending';
 
     // ============================================
@@ -182,7 +181,7 @@ router.post('/', async (req, res) => {
     };
 
     // ============================================
-    // SAVE TO DB (with payment_status)
+    // SAVE SALE TO DB
     // ============================================
     const result = await db.runAsync(
       `INSERT INTO sales 
@@ -233,7 +232,34 @@ router.post('/', async (req, res) => {
     }
 
     // ============================================
-    // SYNC TO VSCU
+    // DEDUCT LOCAL STOCK — always, regardless of VSCU
+    // Only for products (item_type = 'product' or item_ty_cd = '1')
+    // ============================================
+    for (const item of items) {
+      try {
+        const meta = await db.getAsync(
+          `SELECT item_type, item_ty_cd FROM items WHERE item_cd = ?`,
+          [item.item_cd]
+        );
+        const isProduct = meta?.item_type === 'product' || meta?.item_ty_cd === '1';
+        if (!isProduct) continue;
+
+        await db.runAsync(
+          `UPDATE items SET stock = stock - ? WHERE item_cd = ?`,
+          [item.quantity, item.item_cd]
+        );
+        await db.runAsync(
+          `INSERT INTO stock_movements (item_cd, quantity, type, reference, date, created_at)
+           VALUES (?, ?, 'OUT', ?, ?, ?)`,
+          [item.item_cd, item.quantity, invoiceNo, date || now.slice(0, 10), now]
+        );
+      } catch (stockErr) {
+        console.error(`Stock deduct failed for ${item.item_cd}:`, stockErr.message);
+      }
+    }
+
+    // ============================================
+    // SYNC TO VSCU — sale + optional stock push
     // ============================================
     let synced = false;
     let queued = false;
@@ -252,27 +278,7 @@ router.post('/', async (req, res) => {
           signature = vscuResponse.data?.rcptSign || '';
           receiptNo = vscuResponse.data?.rcptNo || vscuResponse.data?.rcptInvcNo || '';
 
-          // Deduct stock — products only
-          for (const item of items) {
-            const meta = await db.getAsync(
-              `SELECT item_type, item_ty_cd FROM items WHERE item_cd = ?`,
-              [item.item_cd]
-            );
-            const isProduct = meta?.item_type === 'product' || meta?.item_ty_cd === '1';
-            if (!isProduct) continue;
-
-            await db.runAsync(
-              `UPDATE items SET stock = stock - ? WHERE item_cd = ?`,
-              [item.quantity, item.item_cd]
-            );
-            await db.runAsync(
-              `INSERT INTO stock_movements (item_cd, quantity, type, reference, date, created_at)
-               VALUES (?, ?, 'OUT', ?, ?, ?)`,
-              [item.item_cd, item.quantity, invoiceNo, date || now.slice(0, 10), now]
-            );
-          }
-
-          // Push stock to VSCU — products only
+          // Push stock movements to VSCU — best-effort, products only
           try {
             for (const item of items) {
               const meta = await db.getAsync(
@@ -325,7 +331,7 @@ router.post('/', async (req, res) => {
               await vscuClient.saveStock(stockPayload);
             }
           } catch (stockError) {
-            console.error('Stock sync error:', stockError.message);
+            console.error('VSCU stock sync error:', stockError.message);
           }
 
         } else {
@@ -390,7 +396,7 @@ router.post('/', async (req, res) => {
 // ============================================
 // GET ALL SALES
 // Default: only completed payments.
-// ?include_pending=1 → include pending/failed (admin views).
+// ?include_pending=1 → include pending/failed.
 // ============================================
 router.get('/', async (req, res) => {
   try {
@@ -402,7 +408,6 @@ router.get('/', async (req, res) => {
     if (end) { sql += ` AND date <= ?`; params.push(end); }
     if (status) { sql += ` AND status = ?`; params.push(status); }
 
-    // Default: hide incomplete payments
     if (include_pending !== '1') {
       sql += ` AND payment_status = 'completed'`;
     }
