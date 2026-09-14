@@ -447,8 +447,8 @@ const Items = () => {
     try {
       const serviceData = {
         ...updatedItem,
-        item_type: newItem.item_type || 'service',
-        itemTyCd: newItem.itemTyCd || '2',
+        item_type: updatedItem.item_type || 'service',
+        itemTyCd: updatedItem.itemTyCd || '2',
       };
       
       await saveItem(serviceData);
