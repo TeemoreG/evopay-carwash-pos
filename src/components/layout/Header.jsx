@@ -2,11 +2,14 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import evopayLogo from '../../assets/evopay-logo.png';
+import { getCachedConfig, fetchPrinterConfig } from '../../utils/printer';
 
 const Header = ({ setSidebarOpen, sidebarOpen }) => {
   const { tin, bhfId, logout } = useAuth();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [printerCfg, setPrinterCfg] = useState(getCachedConfig());
+  const [printerStatus, setPrinterStatus] = useState(null); // null | true | false
   const menuRef = useRef(null);
 
   useEffect(() => {
@@ -19,6 +22,41 @@ const Header = ({ setSidebarOpen, sidebarOpen }) => {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  // Load printer config once, then poll status every 60s
+  useEffect(() => {
+    let cancelled = false;
+    let intervalId = null;
+
+    const checkStatus = async (cfg) => {
+      if (!cfg || cfg.mode !== 'network' || !cfg.networkIp) {
+        if (!cancelled) setPrinterStatus(null);
+        return;
+      }
+      try {
+        const res = await fetch(
+          `${import.meta.env.VITE_API_URL}/api/print/status?ip=${encodeURIComponent(cfg.networkIp)}&port=${cfg.networkPort || 9100}`
+        );
+        const data = await res.json();
+        if (!cancelled) setPrinterStatus(!!data.reachable);
+      } catch {
+        if (!cancelled) setPrinterStatus(false);
+      }
+    };
+
+    (async () => {
+      const cfg = await fetchPrinterConfig();
+      if (cancelled) return;
+      setPrinterCfg(cfg);
+      checkStatus(cfg);
+      intervalId = setInterval(() => checkStatus(cfg), 60000);
+    })();
+
+    return () => {
+      cancelled = true;
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, []);
+
   const handleLogout = () => {
     setMenuOpen(false);
     logout();
@@ -29,6 +67,27 @@ const Header = ({ setSidebarOpen, sidebarOpen }) => {
     setMenuOpen(false);
     navigate(path);
   };
+
+  // Printer chip label
+  const printerChip = (() => {
+    if (printerCfg.mode === 'browser') {
+      return { label: 'Browser Print', color: 'bg-white/10 text-white/60' };
+    }
+    if (printerCfg.mode === 'serial') {
+      return { label: 'USB Printer', color: 'bg-white/10 text-white/70' };
+    }
+    if (printerCfg.mode === 'usb') {
+      return { label: 'WebUSB', color: 'bg-white/10 text-white/70' };
+    }
+    // network
+    if (printerStatus === true) {
+      return { label: 'Printer', color: 'bg-green-500/20 text-green-300', dot: 'bg-green-400' };
+    }
+    if (printerStatus === false) {
+      return { label: 'Printer Off', color: 'bg-red-500/20 text-red-300', dot: 'bg-red-400' };
+    }
+    return { label: 'Printer…', color: 'bg-white/10 text-white/60', dot: 'bg-white/40' };
+  })();
 
   return (
     <header className="bg-[#1a2a4a] text-white px-4 md:px-6 py-3 md:py-4 grid grid-cols-[auto_1fr_auto] items-center shadow-md border-b border-white/10 w-full sticky top-0 z-40">
@@ -69,8 +128,16 @@ const Header = ({ setSidebarOpen, sidebarOpen }) => {
         </div>
       </div>
 
-      {/* Right - Account Menu */}
-      <div className="flex items-center justify-end" ref={menuRef}>
+      {/* Right - Printer status + Account Menu */}
+      <div className="flex items-center justify-end gap-2" ref={menuRef}>
+        <div className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] md:text-xs font-medium ${printerChip.color}`}>
+          {printerChip.dot && <span className={`w-1.5 h-1.5 rounded-full ${printerChip.dot}`}></span>}
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+          </svg>
+          <span>{printerChip.label}</span>
+        </div>
+
         <div className="relative">
           <button
             onClick={() => setMenuOpen((v) => !v)}

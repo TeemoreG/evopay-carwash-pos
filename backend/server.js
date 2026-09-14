@@ -18,6 +18,7 @@ const noticesRoutes = require('./routes/notices');
 const customersRoutes = require('./routes/customers');
 const suppliersRoutes = require('./routes/suppliers');
 const paymentsRoutes = require('./routes/payments');
+const printRoutes = require('./routes/print');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -31,7 +32,6 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'tin', 'bhfId', 'cmckey', 'Origin', 'Accept'],
 }));
-
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
@@ -57,6 +57,7 @@ app.use('/api/notices', noticesRoutes);
 app.use('/api/customers', customersRoutes);
 app.use('/api/suppliers', suppliersRoutes);
 app.use('/api/pay', paymentsRoutes);
+app.use('/api/print', printRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({
