@@ -44,20 +44,41 @@ const getPaymentLabel = (saleData) => {
   return method || 'N/A';
 };
 
+const isSigned = (saleData) => saleData?.synced === 1 && !!saleData?.vscu_signature;
+
+// Build the payload KRA expects
+const buildKraPayload = (saleData) => {
+  const d = new Date(saleData.created_at || saleData.date || new Date().toISOString());
+  const invoiceDate =
+    String(d.getDate()).padStart(2, '0') +
+    String(d.getMonth() + 1).padStart(2, '0') +
+    d.getFullYear();
+  const invoiceTime =
+    String(d.getHours()).padStart(2, '0') +
+    String(d.getMinutes()).padStart(2, '0') +
+    String(d.getSeconds()).padStart(2, '0');
+  const cuId = saleData.cuId || 'KRACU0300003735';
+  const cuReceiptNumber = saleData.invoice_no || '1';
+  const internalData = saleData.internal_data || '';
+  const signature = saleData.vscu_signature || '';
+  return `${invoiceDate}#${invoiceTime}#${cuId}#${cuReceiptNumber}#${internalData}#${signature}`;
+};
+
+// Signed → KRA portal URL.  Unsigned → local /pay/<invoice> page.
+const buildQrTarget = (saleData) => {
+  if (isSigned(saleData)) {
+    const payload = buildKraPayload(saleData);
+    return `https://etims.kra.go.ke/common/link/etims/receipt/indexEtimsReceipt?qrCode=${encodeURIComponent(payload)}`;
+  }
+  const base = import.meta.env.VITE_PAYMENT_BASE_URL || window.location.origin;
+  const invoice = saleData.invoice_no || 'N/A';
+  return `${base}/pay/${encodeURIComponent(invoice)}`;
+};
+
 const generateQRCodeDataURL = async (saleData) => {
   try {
-    const d = new Date(saleData.created_at || saleData.date || new Date().toISOString());
-    const invoiceDate = String(d.getDate()).padStart(2, '0') +
-      String(d.getMonth() + 1).padStart(2, '0') + d.getFullYear();
-    const invoiceTime = String(d.getHours()).padStart(2, '0') +
-      String(d.getMinutes()).padStart(2, '0') +
-      String(d.getSeconds()).padStart(2, '0');
-    const cuId = saleData.cuId || 'KRACU0300003735';
-    const cuReceiptNumber = saleData.invoice_no || '1';
-    const internalData = saleData.internal_data || '';
-    const signature = saleData.vscu_signature || '';
-    const qrString = `${invoiceDate}#${invoiceTime}#${cuId}#${cuReceiptNumber}#${internalData}#${signature}`;
-    return await QRCode.toDataURL(qrString, { width: 120, margin: 2, errorCorrectionLevel: 'M' });
+    const target = buildQrTarget(saleData);
+    return await QRCode.toDataURL(target, { width: 200, margin: 1, errorCorrectionLevel: 'M' });
   } catch (e) {
     console.error('QR Code generation failed:', e);
     return null;
@@ -66,33 +87,25 @@ const generateQRCodeDataURL = async (saleData) => {
 
 const getQRString = (saleData) => {
   try {
-    const d = new Date(saleData.created_at || saleData.date || new Date().toISOString());
-    const invoiceDate = String(d.getDate()).padStart(2, '0') +
-      String(d.getMonth() + 1).padStart(2, '0') + d.getFullYear();
-    const invoiceTime = String(d.getHours()).padStart(2, '0') +
-      String(d.getMinutes()).padStart(2, '0') +
-      String(d.getSeconds()).padStart(2, '0');
-    const cuId = saleData.cuId || 'KRACU0300003735';
-    const cuReceiptNumber = saleData.invoice_no || '1';
-    const internalData = saleData.internal_data || '';
-    const signature = saleData.vscu_signature || '';
-    return `${invoiceDate}#${invoiceTime}#${cuId}#${cuReceiptNumber}#${internalData}#${signature}`;
+    return buildQrTarget(saleData);
   } catch {
     return '';
   }
 };
 
-// Build a plain-text receipt for ESC/POS printers
+// Build a plain-text receipt for ESC/POS printers (native path)
 const buildPlainTextReceipt = (sale) => {
   const line = '-'.repeat(32);
   const eq = '='.repeat(32);
   const items = sale.items || [];
   const paymentLabel = getPaymentLabel(sale);
   const dateStr = formatDateTime(sale.created_at || sale.date || new Date().toISOString());
+  const kraPin = import.meta.env.VITE_VSCU_TIN || '';
 
   let txt = '';
   txt += '        EVOPAY CAR WASH\n';
   txt += '      eTIMS Compliant Receipt\n';
+  if (kraPin) txt += `         PIN: ${kraPin}\n`;
   txt += `Invoice: ${sale.invoice_no || 'N/A'}\n`;
   txt += `${eq}\n`;
   txt += `Cashier: ${sale.user_name || sale.cashier || 'Unknown'}\n`;
@@ -121,9 +134,9 @@ const buildPlainTextReceipt = (sale) => {
   txt += `VAT (16%):`.padEnd(24) + `KES ${(sale.tax || 0).toFixed(2)}\n`;
   txt += `TOTAL:`.padEnd(24) + `KES ${(sale.total || 0).toFixed(2)}\n`;
   txt += `${eq}\n`;
-  txt += sale.synced === 1
+  txt += isSigned(sale)
     ? '      KRA eTIMS Verified\n'
-    : '      Pending VSCU Sync\n';
+    : '      Pending eTIMS sync\n';
   txt += `SCU: ${sale.scuId || 'EVO-VSCU-001'}\n`;
   txt += `CU:  ${sale.cuId || `CU-${String(Date.now()).slice(-6)}`}\n`;
   txt += `${line}\n`;
@@ -133,7 +146,7 @@ const buildPlainTextReceipt = (sale) => {
   return txt;
 };
 
-// ---------- PDF generation (web + fallback) ----------
+// ---------- PDF generation ----------
 export const generateThermalReceipt = async (saleData, logoRef = null) => {
   try {
     const items = saleData.items || [];
@@ -149,21 +162,23 @@ export const generateThermalReceipt = async (saleData, logoRef = null) => {
     const tax = saleData.tax || calcTax || 0;
     const total = saleData.total || subtotal || 0;
 
+    const signed = isSigned(saleData);
     let qrCodeDataURL = null;
     try { qrCodeDataURL = await generateQRCodeDataURL(saleData); } catch {}
 
+    // Measure pass to size the document
     const tempDoc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [80, 200] });
     tempDoc.setFont('courier', 'normal');
-    tempDoc.setFontSize(7);
+    tempDoc.setFontSize(9);
 
     let itemsHeight = 0;
     items.forEach((item) => {
       const splitName = tempDoc.splitTextToSize(item.item_name || item.name || 'Unknown', 30);
-      itemsHeight += splitName.length * 3.5 + 2;
+      itemsHeight += splitName.length * 4.5 + 3;
     });
 
-    const qrHeight = qrCodeDataURL ? 30 : 0;
-    const totalHeight = 130 + qrHeight + (items.length ? itemsHeight : 10);
+    const qrHeight = qrCodeDataURL ? 30 : 12;
+    const totalHeight = 165 + qrHeight + (items.length ? itemsHeight : 12);
 
     const doc = new jsPDF({
       orientation: 'portrait',
@@ -173,137 +188,171 @@ export const generateThermalReceipt = async (saleData, logoRef = null) => {
     });
 
     const pageWidth = doc.internal.pageSize.getWidth();
-    const margin = 5;
+    const margin = 4;
     const leftCol = margin;
     const rightCol = pageWidth - margin;
     const blue = [26, 42, 74];
-    let y = margin + 2;
+    const black = [0, 0, 0];
+    let y = margin + 3;
 
+    // ---- Logo ----
     if (logoRef?.current?.complete && logoRef.current.naturalWidth !== 0) {
       const el = logoRef.current;
-      const logoHeight = 14;
+      const logoHeight = 15;
       const logoWidth = (el.naturalWidth / el.naturalHeight) * logoHeight;
       doc.addImage(el, 'PNG', (pageWidth - logoWidth) / 2, y, logoWidth, logoHeight);
-      y += logoHeight + 3;
+      y += logoHeight + 4;
     } else {
-      y += 3;
+      y += 4;
     }
 
-    doc.setFont('courier', 'bold').setFontSize(8).setTextColor(...blue);
-    doc.text('eTIMS Compliant Receipt', pageWidth / 2, y, { align: 'center' });
-    y += 4;
-    doc.setFontSize(9);
-    doc.text(`Invoice: ${saleData.invoice_no || 'N/A'}`, pageWidth / 2, y, { align: 'center' });
+    // ---- Brand ----
+    doc.setFont('courier', 'bold').setFontSize(11).setTextColor(...blue);
+    doc.text('EVOPAY CAR WASH', pageWidth / 2, y, { align: 'center' });
     y += 5;
 
-    doc.setDrawColor(...blue).setLineWidth(0.2).line(margin, y, pageWidth - margin, y);
-    y += 4;
+    doc.setFont('courier', 'bold').setFontSize(9).setTextColor(...blue);
+    doc.text('eTIMS Compliant Receipt', pageWidth / 2, y, { align: 'center' });
+    y += 5;
 
-    doc.setFont('courier', 'normal').setFontSize(7).setTextColor(0, 0, 0);
+    // ---- KRA PIN ----
+    const kraPin = import.meta.env.VITE_VSCU_TIN || '';
+    if (kraPin) {
+      doc.setFont('courier', 'normal').setFontSize(9).setTextColor(...black);
+      doc.text(`PIN: ${kraPin}`, pageWidth / 2, y, { align: 'center' });
+      y += 5;
+    }
+
+    // ---- Invoice (big) ----
+    doc.setFont('courier', 'bold').setFontSize(11).setTextColor(...black);
+    doc.text(`Invoice: ${saleData.invoice_no || 'N/A'}`, pageWidth / 2, y, { align: 'center' });
+    y += 6;
+
+    doc.setDrawColor(...blue).setLineWidth(0.3).line(margin, y, pageWidth - margin, y);
+    y += 5;
+
+    // ---- Meta block ----
+    doc.setFont('courier', 'normal').setFontSize(9).setTextColor(...black);
     const paymentLabel = getPaymentLabel(saleData);
     const dateStr = formatDateTime(saleData.created_at || saleData.date || new Date().toISOString());
 
     doc.text(`Cashier: ${saleData.user_name || saleData.cashier || 'Unknown'}`, leftCol, y);
     doc.text(`Customer: ${saleData.customer || 'Walk-in'}`, rightCol, y, { align: 'right' });
-    y += 4;
+    y += 5;
     doc.text(`Date: ${dateStr}`, leftCol, y);
     doc.text('Type: Normal Sale', rightCol, y, { align: 'right' });
-    y += 4;
+    y += 5;
     doc.text(`Payment: ${paymentLabel}`, leftCol, y);
-    y += 4;
+    y += 5;
     if (saleData.customer_pin && saleData.customer_pin !== 'N/A' && saleData.customer_pin !== '') {
       doc.text(`PIN: ${saleData.customer_pin}`, leftCol, y);
-      y += 4;
+      y += 5;
     }
 
     y += 1;
     doc.setDrawColor(...blue).line(margin, y, pageWidth - margin, y);
-    y += 4;
+    y += 5;
 
+    // ---- Items ----
     if (items.length) {
-      const xItem = leftCol, xQty = 50, xPrice = 58, xTotal = 72;
-      doc.setFont('courier', 'bold').setFontSize(7).setTextColor(...blue);
+      const xItem = leftCol;
+      const xQty = 52;
+      const xPrice = 61;
+      const xTotal = 74;
+
+      doc.setFont('courier', 'bold').setFontSize(9).setTextColor(...blue);
       doc.text('ITEM', xItem, y);
       doc.text('QTY', xQty, y, { align: 'center' });
       doc.text('PRICE', xPrice, y, { align: 'center' });
       doc.text('TOTAL', xTotal, y, { align: 'center' });
-      y += 3;
-      doc.setDrawColor(...blue).setLineWidth(0.15).line(margin, y, pageWidth - margin, y);
-      y += 3;
+      y += 4;
+      doc.setDrawColor(...blue).setLineWidth(0.2).line(margin, y, pageWidth - margin, y);
+      y += 4;
 
-      doc.setFont('courier', 'normal').setTextColor(0, 0, 0);
+      doc.setFont('courier', 'normal').setFontSize(9).setTextColor(...black);
       items.forEach((item) => {
         const qty = item.quantity || 0;
         const price = item.price || 0;
         const amount = qty * price;
         const name = item.item_name || item.name || 'Unknown';
-        const lines = doc.splitTextToSize(name, 35);
+        const lines = doc.splitTextToSize(name, 32);
         doc.text(lines, xItem, y);
-        const lineY = y + (lines.length - 1) * 3.5;
+        const lineY = y + (lines.length - 1) * 4.5;
         doc.text(`${qty}`, xQty, lineY, { align: 'center' });
         doc.text(`${price.toFixed(2)}`, xPrice, lineY, { align: 'center' });
         doc.text(`${amount.toFixed(2)}`, xTotal, lineY, { align: 'center' });
-        y += lines.length * 3.5 + 2;
+        y += lines.length * 4.5 + 3;
       });
 
       y += 2;
       doc.setDrawColor(...blue).line(margin, y, pageWidth - margin, y);
-      y += 4;
-
-      doc.setFont('courier', 'normal').setFontSize(8).setTextColor(...blue);
-      doc.text('Subtotal:', leftCol, y);
-      doc.text(`KES ${subtotal.toFixed(2)}`, rightCol, y, { align: 'right' });
-      y += 4;
-      doc.text('VAT (16%):', leftCol, y);
-      doc.text(`KES ${tax.toFixed(2)}`, rightCol, y, { align: 'right' });
-      y += 4;
-      doc.setFont('courier', 'bold').setFontSize(9);
-      doc.text('TOTAL:', leftCol, y);
-      doc.text(`KES ${total.toFixed(2)}`, rightCol, y, { align: 'right' });
       y += 5;
 
-      doc.setDrawColor(...blue).line(margin, y, pageWidth - margin, y);
-      y += 4;
+      // ---- Totals ----
+      doc.setFont('courier', 'normal').setFontSize(9).setTextColor(...blue);
+      doc.text('Subtotal:', leftCol, y);
+      doc.text(`KES ${subtotal.toFixed(2)}`, rightCol, y, { align: 'right' });
+      y += 5;
+      doc.text('VAT (16%):', leftCol, y);
+      doc.text(`KES ${tax.toFixed(2)}`, rightCol, y, { align: 'right' });
+      y += 6;
 
-      doc.setFont('courier', 'normal').setFontSize(7);
-      if (saleData.synced === 1 && saleData.vscu_signature) {
+      doc.setFont('courier', 'bold').setFontSize(12);
+      doc.text('TOTAL:', leftCol, y);
+      doc.text(`KES ${total.toFixed(2)}`, rightCol, y, { align: 'right' });
+      y += 7;
+
+      doc.setDrawColor(...blue).line(margin, y, pageWidth - margin, y);
+      y += 5;
+
+      // ---- Verification ----
+      doc.setFont('courier', 'bold').setFontSize(9);
+      if (signed) {
         doc.setTextColor(0, 130, 0);
         doc.text('KRA eTIMS Verified', pageWidth / 2, y, { align: 'center' });
       } else {
         doc.setTextColor(180, 120, 0);
-        doc.text('Pending VSCU Sync', pageWidth / 2, y, { align: 'center' });
+        doc.text('Pending eTIMS sync', pageWidth / 2, y, { align: 'center' });
       }
-      y += 4;
-
-      doc.setTextColor(0, 0, 0);
-      doc.text(`SCU: ${saleData.scuId || 'EVO-VSCU-001'}`, leftCol, y);
-      doc.text(`CU: ${saleData.cuId || `CU-${String(Date.now()).slice(-6)}`}`, rightCol, y, { align: 'right' });
       y += 5;
 
-      doc.setDrawColor(...blue).line(margin, y, pageWidth - margin, y);
-      y += 4;
+      doc.setFont('courier', 'normal').setFontSize(8).setTextColor(...black);
+      doc.text(`SCU: ${saleData.scuId || 'EVO-VSCU-001'}`, leftCol, y);
+      doc.text(`CU: ${saleData.cuId || `CU-${String(Date.now()).slice(-6)}`}`, rightCol, y, { align: 'right' });
+      y += 6;
 
+      doc.setDrawColor(...blue).line(margin, y, pageWidth - margin, y);
+      y += 5;
+
+      // ---- QR ----
       if (qrCodeDataURL) {
-        const qrSize = 22;
+        const qrSize = 26;
         try {
           doc.addImage(qrCodeDataURL, 'PNG', (pageWidth - qrSize) / 2, y, qrSize, qrSize);
           y += qrSize + 2;
-          doc.setFontSize(5).setTextColor(100, 100, 100);
-          doc.text('Scan to verify with KRA', pageWidth / 2, y, { align: 'center' });
-          y += 4;
+          doc.setFont('courier', 'normal').setFontSize(6).setTextColor(100, 100, 100);
+          doc.text(
+            signed ? 'Scan to verify with KRA' : 'Scan to view receipt',
+            pageWidth / 2,
+            y,
+            { align: 'center' }
+          );
+          y += 5;
         } catch {}
       }
 
       y += 1;
       doc.setDrawColor(...blue).line(margin, y, pageWidth - margin, y);
-      y += 4;
+      y += 5;
 
-      doc.setFont('courier', 'normal').setFontSize(8).setTextColor(...blue);
+      // ---- Footer ----
+      doc.setFont('courier', 'bold').setFontSize(9).setTextColor(...blue);
       doc.text('Thank you for your business!', pageWidth / 2, y, { align: 'center' });
-      y += 4;
-      doc.setFontSize(6).setTextColor(100, 100, 100);
+      y += 5;
+      doc.setFont('courier', 'normal').setFontSize(7).setTextColor(100, 100, 100);
       doc.text('KRA eTIMS VSCU v2.0.21', pageWidth / 2, y, { align: 'center' });
     } else {
+      doc.setFont('courier', 'normal').setFontSize(9).setTextColor(...black);
       doc.text('No items found', margin, y + 5);
     }
 
@@ -318,16 +367,14 @@ export const generateThermalReceipt = async (saleData, logoRef = null) => {
 const ThermalReceipt = ({ sale, onClose, onDownload, onPrint }) => {
   const logoRef = useRef(null);
   const [qrCodeData, setQrCodeData] = useState(null);
-  const [qrString, setQrString] = useState('');
   const [printing, setPrinting] = useState(false);
   const [printerCfg, setPrinterCfg] = useState(getCachedConfig());
 
+  const signed = isSigned(sale);
+
   useEffect(() => {
     if (sale) {
-      generateQRCodeDataURL(sale).then((qr) => {
-        setQrCodeData(qr);
-        setQrString(getQRString(sale));
-      });
+      generateQRCodeDataURL(sale).then(setQrCodeData);
     }
   }, [sale]);
 
@@ -340,6 +387,7 @@ const ThermalReceipt = ({ sale, onClose, onDownload, onPrint }) => {
   }, []);
 
   const paymentLabel = getPaymentLabel(sale);
+  const kraPin = import.meta.env.VITE_VSCU_TIN || '';
 
   // ---------- Native print (Android APK) ----------
   const handleNativePrint = async () => {
@@ -358,8 +406,6 @@ const ThermalReceipt = ({ sale, onClose, onDownload, onPrint }) => {
   };
 
   // ---------- Web print ----------
-  // Tries configured printer (network/serial/usb) first.
-  // Falls back to PDF-in-new-window if that fails or mode is 'browser'.
   const handleWebPrint = async () => {
     setPrinting(true);
     try {
@@ -418,25 +464,34 @@ const ThermalReceipt = ({ sale, onClose, onDownload, onPrint }) => {
         {/* Preview */}
         <div className="flex-1 overflow-y-auto p-4 bg-gray-100">
           <div className="max-w-[80mm] mx-auto bg-white shadow-lg">
-            <div className="p-4 font-mono text-[10px]">
+            <div className="p-4 font-mono text-[11px]">
               <div className="flex justify-center mb-2">
                 <img
                   ref={logoRef}
                   src="/evopay-logo.png"
                   alt="Evopay Logo"
-                  className="h-12 object-contain"
+                  className="h-14 object-contain"
                   onError={(e) => (e.target.style.display = 'none')}
                 />
               </div>
-              <div className="text-center font-bold text-[#1a2a4a] text-xs">
+
+              <div className="text-center font-bold text-[#1a2a4a] text-sm">
+                EVOPAY CAR WASH
+              </div>
+              <div className="text-center font-bold text-[#1a2a4a] text-xs mt-1">
                 eTIMS Compliant Receipt
               </div>
-              <div className="text-center font-bold text-[#1a2a4a] text-sm mt-1">
+              {kraPin && (
+                <div className="text-center text-[10px] text-gray-700 mt-1">
+                  PIN: {kraPin}
+                </div>
+              )}
+              <div className="text-center font-bold text-[#1a2a4a] text-base mt-2">
                 Invoice: {sale.invoice_no || 'N/A'}
               </div>
               <hr className="border-[#1a2a4a] my-2" />
 
-              <div className="text-[8px] leading-relaxed">
+              <div className="text-[10px] leading-relaxed">
                 <div className="flex justify-between">
                   <span>Cashier: {sale.user_name || sale.cashier || 'Unknown'}</span>
                   <span>Customer: {sale.customer || 'Walk-in'}</span>
@@ -453,15 +508,15 @@ const ThermalReceipt = ({ sale, onClose, onDownload, onPrint }) => {
 
               <hr className="border-[#1a2a4a] my-2" />
 
-              <div className="flex font-bold text-[#1a2a4a] text-[8px]">
+              <div className="flex font-bold text-[#1a2a4a] text-[10px]">
                 <div className="flex-1">ITEM</div>
                 <div className="w-8 text-center">QTY</div>
-                <div className="w-12 text-center">PRICE</div>
-                <div className="w-14 text-center">TOTAL</div>
+                <div className="w-14 text-center">PRICE</div>
+                <div className="w-16 text-center">TOTAL</div>
               </div>
               <hr className="border-[#1a2a4a] my-1" />
 
-              <div className="text-[8px] leading-relaxed">
+              <div className="text-[10px] leading-relaxed">
                 {(sale.items || []).map((item, idx) => {
                   const qty = item.quantity || 0;
                   const price = item.price || 0;
@@ -473,8 +528,8 @@ const ThermalReceipt = ({ sale, onClose, onDownload, onPrint }) => {
                       <div className="flex">
                         <div className="flex-1"></div>
                         <div className="w-8 text-center">{qty}</div>
-                        <div className="w-12 text-center">{price.toFixed(2)}</div>
-                        <div className="w-14 text-center">{amount.toFixed(2)}</div>
+                        <div className="w-14 text-center">{price.toFixed(2)}</div>
+                        <div className="w-16 text-center">{amount.toFixed(2)}</div>
                       </div>
                     </div>
                   );
@@ -483,7 +538,7 @@ const ThermalReceipt = ({ sale, onClose, onDownload, onPrint }) => {
 
               <hr className="border-[#1a2a4a] my-2" />
 
-              <div className="text-[10px] leading-relaxed">
+              <div className="text-[11px] leading-relaxed">
                 <div className="flex justify-between">
                   <span className="text-[#1a2a4a]">Subtotal:</span>
                   <span className="text-[#1a2a4a]">KES {(sale.subtotal || 0).toFixed(2)}</span>
@@ -492,7 +547,7 @@ const ThermalReceipt = ({ sale, onClose, onDownload, onPrint }) => {
                   <span className="text-[#1a2a4a]">VAT (16%):</span>
                   <span className="text-[#1a2a4a]">KES {(sale.tax || 0).toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between font-bold text-[#1a2a4a] text-sm">
+                <div className="flex justify-between font-bold text-[#1a2a4a] text-base mt-1">
                   <span>TOTAL:</span>
                   <span>KES {(sale.total || 0).toFixed(2)}</span>
                 </div>
@@ -500,13 +555,13 @@ const ThermalReceipt = ({ sale, onClose, onDownload, onPrint }) => {
 
               <hr className="border-[#1a2a4a] my-2" />
 
-              <div className="text-center text-[8px]">
-                {sale.synced === 1 && sale.vscu_signature
+              <div className="text-center text-[10px] font-bold">
+                {signed
                   ? <div className="text-green-700">KRA eTIMS Verified</div>
-                  : <div className="text-amber-600">Pending VSCU Sync</div>}
+                  : <div className="text-amber-600">Pending eTIMS sync</div>}
               </div>
 
-              <div className="flex justify-between text-[8px] mt-1">
+              <div className="flex justify-between text-[9px] mt-1">
                 <span>SCU: {sale.scuId || 'EVO-VSCU-001'}</span>
                 <span>CU: {sale.cuId || `CU-${String(Date.now()).slice(-6)}`}</span>
               </div>
@@ -515,22 +570,24 @@ const ThermalReceipt = ({ sale, onClose, onDownload, onPrint }) => {
 
               {qrCodeData && (
                 <div className="text-center my-2">
-                  <img src={qrCodeData} alt="KRA QR" className="mx-auto" style={{ width: '80px', height: '80px' }} />
-                  <div className="text-[6px] text-gray-600 mt-1">Click to verify with KRA</div>
+                  <img src={qrCodeData} alt="Receipt QR" className="mx-auto" style={{ width: '100px', height: '100px' }} />
+                  <div className="text-[8px] text-gray-600 mt-1">
+                    {signed ? 'Scan to verify with KRA' : 'Scan to view receipt'}
+                  </div>
                 </div>
               )}
 
-              <div className="text-center text-[#1a2a4a] text-[10px]">
+              <div className="text-center text-[#1a2a4a] text-[11px] font-bold">
                 Thank you for your business!
               </div>
-              <div className="text-center text-gray-500 text-[7px]">
+              <div className="text-center text-gray-500 text-[8px]">
                 KRA eTIMS VSCU v2.0.21
               </div>
             </div>
           </div>
         </div>
 
-        {/* Actions — responsive */}
+        {/* Actions */}
         <div className="p-3 sm:p-4 border-t border-gray-200 flex flex-col sm:flex-row gap-2 sm:justify-end">
           <button
             onClick={isNative ? handleNativePrint : handleWebPrint}
