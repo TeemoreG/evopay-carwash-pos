@@ -158,21 +158,23 @@ export const generateThermalReceipt = async (saleData, logoRef = null, paperWidt
 
     const isNarrow = paperWidthMM <= 58;
     const margin = 2.5;
-    const bodyFont = isNarrow ? 10 : 11;
-    const titleFont = isNarrow ? 12 : 13;
-    const brandFont = isNarrow ? 13 : 14;
-    const totalFont = isNarrow ? 13 : 14;
-    const qrSize = isNarrow ? 24 : 28;
-    const lineH = 4;         // per text line height in mm
-    const itemLineH = 3.8;   // per wrapped item name line
+    const bodyFont = isNarrow ? 11.5 : 12.5;
+    const itemFont = isNarrow ? 11 : 12;
+    const titleFont = isNarrow ? 14 : 15;
+    const brandFont = isNarrow ? 15 : 16;
+    const totalFont = isNarrow ? 15 : 16;
+    const footerFont = isNarrow ? 8 : 9;
+    const qrSize = isNarrow ? 26 : 30;
+    const lineH = 4.5;
+    const itemLineH = 4.2;
 
     const usableWidth = paperWidthMM - margin * 2;
     const nameColWidth = usableWidth * 0.5;
 
-    // Measure
-    const tempDoc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [paperWidthMM, 200] });
+    // Measure item block
+    const tempDoc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [paperWidthMM, 300] });
     tempDoc.setFont('courier', 'bold');
-    tempDoc.setFontSize(bodyFont);
+    tempDoc.setFontSize(itemFont);
 
     let itemsHeight = 0;
     items.forEach((item) => {
@@ -180,8 +182,12 @@ export const generateThermalReceipt = async (saleData, logoRef = null, paperWidt
       itemsHeight += splitName.length * itemLineH + 1.5;
     });
 
-    const qrHeight = qrCodeDataURL ? qrSize + 4 : 0;
-    const totalHeight = 120 + qrHeight + (items.length ? itemsHeight : 10);
+    // Generous height — over-estimate so nothing clips
+    const headerHeight = 105;
+    const qrBlockHeight = qrCodeDataURL ? qrSize + 14 : 0;
+    const footerHeight = 22;
+    const itemsBlock = items.length ? itemsHeight + 40 : 15;
+    const totalHeight = headerHeight + itemsBlock + qrBlockHeight + footerHeight;
 
     const doc = new jsPDF({
       orientation: 'portrait',
@@ -197,47 +203,46 @@ export const generateThermalReceipt = async (saleData, logoRef = null, paperWidt
     const black = [0, 0, 0];
     let y = margin + 3;
 
-    // Column x-positions, proportional to usable width
     const xItem = leftCol;
     const xQty = leftCol + usableWidth * 0.60;
     const xPrice = leftCol + usableWidth * 0.78;
     const xTotal = rightCol;
 
-    // ---- Logo (small) ----
+    // ---- Logo ----
     if (logoRef?.current?.complete && logoRef.current.naturalWidth !== 0) {
       const el = logoRef.current;
-      const logoHeight = isNarrow ? 10 : 12;
+      const logoHeight = isNarrow ? 11 : 13;
       const logoWidth = (el.naturalWidth / el.naturalHeight) * logoHeight;
       doc.addImage(el, 'PNG', (pageWidth - logoWidth) / 2, y, logoWidth, logoHeight);
-      y += logoHeight + 2;
+      y += logoHeight + 2.5;
     }
 
-    // ---- Brand (bold, colored) ----
+    // ---- Brand ----
     doc.setFont('courier', 'bold').setFontSize(brandFont).setTextColor(...blue);
     doc.text('EVOPAY CAR WASH', pageWidth / 2, y, { align: 'center' });
-    y += 5;
+    y += 5.5;
 
     doc.setFont('courier', 'bold').setFontSize(bodyFont).setTextColor(...black);
     doc.text('eTIMS Compliant Receipt', pageWidth / 2, y, { align: 'center' });
-    y += 4;
+    y += 4.5;
 
     // ---- KRA PIN ----
     const kraPin = import.meta.env.VITE_VSCU_TIN || '';
     if (kraPin) {
       doc.setFont('courier', 'bold').setFontSize(bodyFont).setTextColor(...black);
       doc.text(`PIN: ${kraPin}`, pageWidth / 2, y, { align: 'center' });
-      y += 4;
+      y += 4.5;
     }
 
-    // ---- Invoice (big, bold) ----
+    // ---- Invoice ----
     doc.setFont('courier', 'bold').setFontSize(titleFont).setTextColor(...black);
     doc.text(`Invoice: ${saleData.invoice_no || 'N/A'}`, pageWidth / 2, y, { align: 'center' });
-    y += 5;
+    y += 5.5;
 
     doc.setDrawColor(...blue).setLineWidth(0.4).line(margin, y, pageWidth - margin, y);
-    y += 4;
+    y += 4.5;
 
-    // ---- Meta block (all bold) ----
+    // ---- Meta ----
     doc.setFont('courier', 'bold').setFontSize(bodyFont).setTextColor(...black);
     const paymentLabel = getPaymentLabel(saleData);
     const dateStr = formatDateTime(saleData.created_at || saleData.date || new Date().toISOString());
@@ -256,20 +261,20 @@ export const generateThermalReceipt = async (saleData, logoRef = null, paperWidt
     }
 
     doc.setDrawColor(...blue).line(margin, y, pageWidth - margin, y);
-    y += 4;
+    y += 4.5;
 
     // ---- Items ----
     if (items.length) {
-      doc.setFont('courier', 'bold').setFontSize(bodyFont).setTextColor(...blue);
+      doc.setFont('courier', 'bold').setFontSize(itemFont).setTextColor(...blue);
       doc.text('ITEM', xItem, y);
       doc.text('QTY', xQty, y, { align: 'right' });
       doc.text('PRICE', xPrice, y, { align: 'right' });
       doc.text('TOTAL', xTotal, y, { align: 'right' });
-      y += 3.5;
+      y += 4;
       doc.setDrawColor(...blue).setLineWidth(0.2).line(margin, y, pageWidth - margin, y);
-      y += 3.5;
+      y += 4;
 
-      doc.setFont('courier', 'bold').setFontSize(bodyFont).setTextColor(...black);
+      doc.setFont('courier', 'bold').setFontSize(itemFont).setTextColor(...black);
       items.forEach((item) => {
         const qty = item.quantity || 0;
         const price = item.price || 0;
@@ -283,9 +288,9 @@ export const generateThermalReceipt = async (saleData, logoRef = null, paperWidt
         y += lines.length * itemLineH + 1.5;
       });
 
-      y += 1;
+      y += 1.5;
       doc.setDrawColor(...blue).line(margin, y, pageWidth - margin, y);
-      y += 4;
+      y += 4.5;
 
       // ---- Totals ----
       doc.setFont('courier', 'bold').setFontSize(bodyFont).setTextColor(...black);
@@ -299,12 +304,12 @@ export const generateThermalReceipt = async (saleData, logoRef = null, paperWidt
       doc.setFont('courier', 'bold').setFontSize(totalFont).setTextColor(...black);
       doc.text('TOTAL:', leftCol, y);
       doc.text(`KES ${total.toFixed(2)}`, rightCol, y, { align: 'right' });
-      y += 6;
+      y += 7;
 
       doc.setDrawColor(...blue).setLineWidth(0.4).line(margin, y, pageWidth - margin, y);
-      y += 4;
+      y += 5;
 
-      // ---- Verification (bold) ----
+      // ---- Verification ----
       doc.setFont('courier', 'bold').setFontSize(bodyFont);
       if (signed) {
         doc.setTextColor(0, 110, 0);
@@ -313,30 +318,38 @@ export const generateThermalReceipt = async (saleData, logoRef = null, paperWidt
         doc.setTextColor(160, 100, 0);
         doc.text('PENDING eTIMS SYNC', pageWidth / 2, y, { align: 'center' });
       }
-      y += 5;
+      y += 6;
 
       // ---- QR ----
       if (qrCodeDataURL) {
         try {
           doc.addImage(qrCodeDataURL, 'PNG', (pageWidth - qrSize) / 2, y, qrSize, qrSize);
-          y += qrSize + 2;
-          doc.setFont('courier', 'bold').setFontSize(6.5).setTextColor(60, 60, 60);
+          y += qrSize + 3;
+          doc.setFont('courier', 'bold').setFontSize(footerFont).setTextColor(60, 60, 60);
           doc.text(
             signed ? 'Scan to verify on KRA' : 'Scan to view receipt',
             pageWidth / 2,
             y,
             { align: 'center' }
           );
-          y += 4;
+          y += 5;
         } catch {}
       }
 
-      // ---- Footer ----
+      // ---- Footer (with extra headroom so printer can't clip) ----
+      y += 2;
       doc.setFont('courier', 'bold').setFontSize(bodyFont).setTextColor(...blue);
       doc.text('Thank you for your business!', pageWidth / 2, y, { align: 'center' });
-      y += 4;
-      doc.setFont('courier', 'bold').setFontSize(6.5).setTextColor(120, 120, 120);
-      doc.text(`SCU: ${saleData.scuId || 'EVO-VSCU-001'}  |  KRA eTIMS v2.0.21`, pageWidth / 2, y, { align: 'center' });
+      y += 5;
+      doc.setFont('courier', 'bold').setFontSize(footerFont).setTextColor(120, 120, 120);
+      doc.text(
+        `SCU: ${saleData.scuId || 'EVO-VSCU-001'}  |  KRA eTIMS v2.0.21`,
+        pageWidth / 2,
+        y,
+        { align: 'center' }
+      );
+      // explicit bottom padding so driver never trims the last lines
+      y += 8;
     } else {
       doc.setFont('courier', 'bold').setFontSize(bodyFont).setTextColor(...black);
       doc.text('No items found', margin, y + 5);
@@ -375,14 +388,12 @@ const ThermalReceipt = ({ sale, onClose, onDownload, onPrint }) => {
   const paymentLabel = getPaymentLabel(sale);
   const kraPin = import.meta.env.VITE_VSCU_TIN || '';
 
-  // Paper width from config, default 58mm
   const getPaperWidthMM = () => {
     const raw = printerCfg?.width ?? printerCfg?.paperWidth ?? 58;
     const n = parseInt(String(raw).replace(/[^\d]/g, ''), 10);
     return n === 80 ? 80 : 58;
   };
 
-  // ---------- Native print (Android APK) ----------
   const handleNativePrint = async () => {
     setPrinting(true);
     try {
@@ -398,7 +409,6 @@ const ThermalReceipt = ({ sale, onClose, onDownload, onPrint }) => {
     }
   };
 
-  // ---------- Web print (PDF in new window) ----------
   const handleWebPrint = async () => {
     setPrinting(true);
     try {
@@ -428,7 +438,6 @@ const ThermalReceipt = ({ sale, onClose, onDownload, onPrint }) => {
     }
   };
 
-  // ---------- Download PDF (web only) ----------
   const handleDownload = async () => {
     try {
       const doc = await generateThermalReceipt(sale, logoRef, getPaperWidthMM());
@@ -454,7 +463,6 @@ const ThermalReceipt = ({ sale, onClose, onDownload, onPrint }) => {
           </button>
         </div>
 
-        {/* Preview */}
         <div className="flex-1 overflow-y-auto p-4 bg-gray-100">
           <div className="max-w-[80mm] mx-auto bg-white shadow-lg">
             <div className="p-4 font-mono text-[11px] font-bold">
@@ -565,7 +573,6 @@ const ThermalReceipt = ({ sale, onClose, onDownload, onPrint }) => {
           </div>
         </div>
 
-        {/* Actions */}
         <div className="p-3 sm:p-4 border-t border-gray-200 flex flex-col sm:flex-row gap-2 sm:justify-end">
           <button
             onClick={isNative ? handleNativePrint : handleWebPrint}
