@@ -23,7 +23,7 @@ const mapServiceToVSCUPayload = (item) => {
     bhfId: item.bhfId || import.meta.env.VITE_VSCU_BHF_ID,
     itemCd: item.itemCd || item.item_cd,
     itemClsCd: item.itemClsCd || item.item_cls_cd || '5059690809',
-    itemTyCd: item.itemTyCd || '2',
+    itemTyCd: item.itemTyCd || (item.item_type === 'product' ? '1' : '2'),
     itemNm: item.itemNm || item.item_name,
     itemStdNm: item.itemStdNm || null,
     orgnNatCd: item.orgnNatCd || item.orgn_nat_cd || 'KE',
@@ -400,8 +400,8 @@ const Items = () => {
     try {
       const serviceData = {
         ...newItem,
-        item_type: 'service',
-        itemTyCd: '2'
+        item_type: newItem.item_type || 'service',
+        itemTyCd: newItem.itemTyCd || '2',
       };
       
       const response = await saveItem(serviceData);
@@ -447,8 +447,8 @@ const Items = () => {
     try {
       const serviceData = {
         ...updatedItem,
-        item_type: 'service',
-        itemTyCd: '2'
+        item_type: newItem.item_type || 'service',
+        itemTyCd: newItem.itemTyCd || '2',
       };
       
       await saveItem(serviceData);

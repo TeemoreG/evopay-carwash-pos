@@ -22,8 +22,6 @@ const PRODUCT_CATEGORIES = [
 const SERVICE_PRESETS = [800, 1000, 1200, 1500, 2000, 2500, 3000, 4000, 5000];
 const PRODUCT_PRESETS = [50, 100, 150, 200, 250, 300, 500, 800, 1000];
 
-// Build a Cloudinary thumbnail URL (200x200 square crop).
-// Works with any Cloudinary URL; falls back to the original if not Cloudinary.
 const toThumb = (url) => {
   if (!url) return '';
   if (!url.includes('res.cloudinary.com')) return url;
@@ -33,14 +31,20 @@ const toThumb = (url) => {
 const AddItemForm = ({ item, onSave, onCancel, isSaving, mode = 'service' }) => {
   const { user } = useAuth();
   const isEditing = !!item;
-  const isProduct = mode === 'product';
+
+  // Determine initial type
+  const initialIsProduct =
+    mode === 'product' ||
+    (item && ((item.item_type || '').toLowerCase() === 'product' || String(item.item_ty_cd || item.itemTyCd) === '1'));
+
+  const [isProduct, setIsProduct] = useState(initialIsProduct);
 
   const [formData, setFormData] = useState({
     itemCd: '',
     itemNm: '',
     itemStdNm: '',
     itemClsCd: '',
-    itemTyCd: isProduct ? '1' : '2',
+    itemTyCd: initialIsProduct ? '1' : '2',
     dftPrc: '',
     taxTyCd: 'B',
     sftyQty: '',
@@ -52,13 +56,16 @@ const AddItemForm = ({ item, onSave, onCancel, isSaving, mode = 'service' }) => 
     isrcAplcbYn: 'N',
     bcd: '',
     addInfo: '',
-    category: isProduct ? 'detergent' : 'basic',
+    category: initialIsProduct ? 'detergent' : 'basic',
     image_url: '',
   });
 
   useEffect(() => {
     if (item) {
-      const itemIsProduct = (item.item_type === 'product') || (item.itemTyCd === '1');
+      const itemIsProduct =
+        (item.item_type || '').toLowerCase() === 'product' ||
+        String(item.item_ty_cd || item.itemTyCd) === '1';
+      setIsProduct(itemIsProduct);
       setFormData({
         itemCd: item.itemCd || item.item_cd || '',
         itemNm: item.itemNm || item.item_name || '',
@@ -87,6 +94,17 @@ const AddItemForm = ({ item, onSave, onCancel, isSaving, mode = 'service' }) => 
     setFormData({ ...formData, [name]: value });
   };
 
+  // Switch between Product/Service
+  const switchType = (toProduct) => {
+    if (toProduct === isProduct) return;
+    setIsProduct(toProduct);
+    setFormData((prev) => ({
+      ...prev,
+      itemTyCd: toProduct ? '1' : '2',
+      category: toProduct ? 'detergent' : 'basic',
+    }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -106,7 +124,7 @@ const AddItemForm = ({ item, onSave, onCancel, isSaving, mode = 'service' }) => 
       itemNm: formData.itemNm,
       itemStdNm: formData.itemStdNm || null,
       itemClsCd: formData.itemClsCd,
-      itemTyCd: formData.itemTyCd || (isProduct ? '1' : '2'),
+      itemTyCd: isProduct ? '1' : '2',
       orgnNatCd: formData.orgnNatCd,
       pkgUnitCd: formData.pkgUnitCd,
       qtyUnitCd: formData.qtyUnitCd,
@@ -140,30 +158,72 @@ const AddItemForm = ({ item, onSave, onCancel, isSaving, mode = 'service' }) => 
   const pricePresets = isProduct ? PRODUCT_PRESETS : SERVICE_PRESETS;
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
-      <div className="flex justify-between items-center mb-4">
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-5">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-4">
         <div>
-          <h3 className="text-lg font-semibold text-[#1a2a4a]">
+          <h3 className="text-base sm:text-lg font-semibold text-[#1a2a4a]">
             {isEditing
               ? `Edit ${isProduct ? 'Product' : 'Service'}`
               : `Add New ${isProduct ? 'Product' : 'Service'}`}
           </h3>
-          <p className="text-xs text-gray-400 mt-0.5">
+          <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5">
             {isProduct
               ? 'Retail item with stock tracking'
               : 'Car wash service with KRA eTIMS sync'}
           </p>
         </div>
         {isEditing && (
-          <span className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full font-mono">
+          <span className="text-xs text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full font-mono">
             {formData.itemCd}
           </span>
         )}
       </div>
 
-      <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Type toggle */}
+      <div className="mb-4">
+        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5">
+          Item Type
+        </label>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => switchType(false)}
+            className={`py-2.5 px-3 rounded-lg text-sm font-semibold transition flex items-center justify-center gap-2 border-2 ${
+              !isProduct
+                ? 'bg-[#1a2a4a] text-white border-[#1a2a4a] shadow-sm'
+                : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+            }`}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6h.1a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3v-6" />
+            </svg>
+            Service
+          </button>
+          <button
+            type="button"
+            onClick={() => switchType(true)}
+            className={`py-2.5 px-3 rounded-lg text-sm font-semibold transition flex items-center justify-center gap-2 border-2 ${
+              isProduct
+                ? 'bg-[#f47b20] text-white border-[#f47b20] shadow-sm'
+                : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+            }`}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+            </svg>
+            Product
+          </button>
+        </div>
+        <p className="text-[10px] text-gray-400 mt-1">
+          {isProduct
+            ? 'Products are tangible items with stock tracking.'
+            : 'Services are wash packages without stock.'}
+        </p>
+      </div>
+
+      <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
             {isProduct ? 'Product' : 'Service'} Code {!isEditing && <span className="text-red-500">*</span>}
           </label>
           <input
@@ -178,11 +238,11 @@ const AddItemForm = ({ item, onSave, onCancel, isSaving, mode = 'service' }) => 
             placeholder={isProduct ? 'e.g. PRD001' : 'e.g. SRV001'}
             required={!isEditing}
           />
-          {isEditing && <p className="text-xs text-gray-400 mt-1">Code cannot be changed</p>}
+          {isEditing && <p className="text-[10px] text-gray-400 mt-1">Code cannot be changed</p>}
         </div>
 
         <div className="md:col-span-2">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
             {isProduct ? 'Product' : 'Service'} Name <span className="text-red-500">*</span>
           </label>
           <input
@@ -198,17 +258,17 @@ const AddItemForm = ({ item, onSave, onCancel, isSaving, mode = 'service' }) => 
 
         {/* Image URL + Preview */}
         <div className="md:col-span-3">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Image URL</label>
-          <div className="flex gap-3 items-start">
+          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Image URL</label>
+          <div className="flex gap-2 sm:gap-3 items-start">
             <input
               type="url"
               name="image_url"
               value={formData.image_url}
               onChange={handleChange}
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f47b20] focus:border-transparent text-sm font-mono"
-              placeholder="https://res.cloudinary.com/dvqjgbdhp/image/upload/..."
+              className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f47b20] focus:border-transparent text-xs sm:text-sm font-mono"
+              placeholder="https://res.cloudinary.com/..."
             />
-            <div className="w-20 h-20 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden bg-gray-50 shrink-0">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden bg-gray-50 shrink-0">
               {formData.image_url ? (
                 <img
                   src={toThumb(formData.image_url)}
@@ -216,23 +276,23 @@ const AddItemForm = ({ item, onSave, onCancel, isSaving, mode = 'service' }) => 
                   className="w-full h-full object-cover"
                   onError={(e) => {
                     e.target.style.display = 'none';
-                    e.target.parentNode.innerHTML = '<span class="text-[10px] text-gray-400 text-center px-1">Invalid URL</span>';
+                    e.target.parentNode.innerHTML = '<span class="text-[9px] text-gray-400 text-center px-1">Invalid</span>';
                   }}
                 />
               ) : (
-                <svg className="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-6 h-6 sm:w-8 sm:h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
               )}
             </div>
           </div>
-          <p className="text-xs text-gray-400 mt-1">
-            Paste a Cloudinary URL. It will be auto-cropped to a square thumbnail for the POS grid.
+          <p className="text-[10px] text-gray-400 mt-1">
+            Paste a Cloudinary URL. Auto-cropped to square for POS grid.
           </p>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Category</label>
           <select
             name="category"
             value={formData.category}
@@ -246,7 +306,7 @@ const AddItemForm = ({ item, onSave, onCancel, isSaving, mode = 'service' }) => 
         </div>
 
         <div className="md:col-span-2">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
             Price (KES) <span className="text-red-500">*</span>
           </label>
           <input
@@ -266,7 +326,7 @@ const AddItemForm = ({ item, onSave, onCancel, isSaving, mode = 'service' }) => 
                 key={preset}
                 type="button"
                 onClick={() => setFormData({ ...formData, dftPrc: preset })}
-                className={`px-2.5 py-1 text-xs rounded-lg border transition ${
+                className={`px-2 py-0.5 sm:px-2.5 sm:py-1 text-[10px] sm:text-xs rounded-lg border transition ${
                   Number(formData.dftPrc) === preset
                     ? 'bg-[#f47b20] text-white border-[#f47b20]'
                     : 'bg-white text-gray-600 border-gray-200 hover:border-[#f47b20]'
@@ -280,7 +340,7 @@ const AddItemForm = ({ item, onSave, onCancel, isSaving, mode = 'service' }) => 
 
         {isProduct ? (
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Stock</label>
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Stock</label>
             <input
               type="number"
               name="stock"
@@ -290,11 +350,11 @@ const AddItemForm = ({ item, onSave, onCancel, isSaving, mode = 'service' }) => 
               placeholder="e.g. 50"
               min="0"
             />
-            <p className="text-xs text-gray-400 mt-1">Current stock on hand</p>
+            <p className="text-[10px] text-gray-400 mt-1">Current stock on hand</p>
           </div>
         ) : (
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Duration (minutes)</label>
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Duration (min)</label>
             <input
               type="number"
               name="sftyQty"
@@ -304,12 +364,12 @@ const AddItemForm = ({ item, onSave, onCancel, isSaving, mode = 'service' }) => 
               placeholder="e.g. 30"
               min="0"
             />
-            <p className="text-xs text-gray-400 mt-1">Estimated wash time</p>
+            <p className="text-[10px] text-gray-400 mt-1">Estimated wash time</p>
           </div>
         )}
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
             KRA Class Code <span className="text-red-500">*</span>
           </label>
           <input
@@ -324,7 +384,7 @@ const AddItemForm = ({ item, onSave, onCancel, isSaving, mode = 'service' }) => 
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Tax Type</label>
+          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Tax Type</label>
           <select
             name="taxTyCd"
             value={formData.taxTyCd}
@@ -338,7 +398,7 @@ const AddItemForm = ({ item, onSave, onCancel, isSaving, mode = 'service' }) => 
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Status</label>
           <select
             name="useYn"
             value={formData.useYn}
@@ -351,7 +411,7 @@ const AddItemForm = ({ item, onSave, onCancel, isSaving, mode = 'service' }) => 
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Barcode</label>
+          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Barcode</label>
           <input
             type="text"
             name="bcd"
@@ -363,7 +423,7 @@ const AddItemForm = ({ item, onSave, onCancel, isSaving, mode = 'service' }) => 
         </div>
 
         <div className="md:col-span-2">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Description</label>
           <input
             type="text"
             name="addInfo"
@@ -374,17 +434,17 @@ const AddItemForm = ({ item, onSave, onCancel, isSaving, mode = 'service' }) => 
           />
         </div>
 
-        <input type="hidden" name="itemTyCd" value={formData.itemTyCd} />
+        <input type="hidden" name="itemTyCd" value={isProduct ? '1' : '2'} />
         <input type="hidden" name="orgnNatCd" value={formData.orgnNatCd} />
         <input type="hidden" name="pkgUnitCd" value={formData.pkgUnitCd} />
         <input type="hidden" name="qtyUnitCd" value={formData.qtyUnitCd} />
         <input type="hidden" name="isrcAplcbYn" value={formData.isrcAplcbYn} />
 
-        <div className="flex items-center gap-3 md:col-span-3 pt-4 border-t border-gray-100">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 md:col-span-3 pt-4 border-t border-gray-100">
           <button
             type="submit"
             disabled={isSaving}
-            className={`bg-[#f47b20] hover:bg-[#e06d1a] text-white px-6 py-2.5 rounded-lg transition font-medium text-sm flex items-center gap-2 ${
+            className={`bg-[#f47b20] hover:bg-[#e06d1a] text-white px-6 py-2.5 rounded-lg transition font-medium text-sm flex items-center justify-center gap-2 ${
               isSaving ? 'opacity-70 cursor-not-allowed' : ''
             }`}
           >
