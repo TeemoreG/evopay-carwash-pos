@@ -5,11 +5,11 @@ import Cart from '../components/pos/Cart';
 import PaymentBar from '../components/pos/PaymentBar';
 import QRPaymentModal from '../components/pos/QRPaymentModal';
 import RecentSalesPanel from '../components/pos/RecentSalesPanel';
-import ThermalReceipt from '../components/sales/ThermalReceipt';
+import ThermalReceipt, { generateThermalReceipt } from '../components/sales/ThermalReceipt';
 import {
   getItems, getSales, saveSales, checkVSCUStatus,
   getNextInvoice, createQRSession, stkPush, pollPaymentStatus,
-  confirmPayment,
+  confirmPayment, retrySale,
 } from '../api/vscuApi';
 import { useAuth } from '../context/AuthContext';
 
@@ -30,7 +30,7 @@ const Sales = () => {
   const [qrSession, setQrSession] = useState(null);
   const [saving, setSaving] = useState(false);
   const [now, setNow] = useState(new Date());
-  const [mobileTab, setMobileTab] = useState('services'); // 'services' | 'cart' | 'sales'
+  const [mobileTab, setMobileTab] = useState('services');
 
   useEffect(() => {
     fetchData();
@@ -230,6 +230,60 @@ const Sales = () => {
     return r.data;
   };
 
+  // ============================================
+  // Recent Sales — retry + download
+  // ============================================
+  const handleRetrySync = async (saleId) => {
+    try {
+      const r = await retrySale(saleId);
+      if (r.data?.synced) {
+        toast.success('Synced to KRA');
+      } else {
+        toast.warn('Still pending — VSCU may be offline');
+      }
+      fetchData();
+    } catch (e) {
+      console.error('Retry failed:', e);
+      toast.error('Retry failed');
+    }
+  };
+
+  const handleDownloadReceipt = async (sale) => {
+    try {
+      // Load full sale with items if it doesn't have them
+      let fullSale = sale;
+      if (!sale.items || sale.items.length === 0) {
+        const r = await getSale(sale.id);
+        fullSale = r.data || sale;
+      }
+
+      const doc = await generateThermalReceipt(fullSale, null);
+      if (!doc) throw new Error('Failed to generate PDF');
+
+      const blob = doc.output('blob');
+      const url = URL.createObjectURL(blob);
+      const filename = `receipt-${sale.invoice_no || sale.id || Date.now()}.pdf`;
+
+      // Android Chrome / WebView safe download
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.rel = 'noopener';
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
+      // Keep blob alive for 60s — revoking too early causes silent failures on mobile
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+
+      toast.success('Receipt downloaded');
+    } catch (e) {
+      console.error('Download failed:', e);
+      toast.error('Download failed: ' + (e.message || 'Unknown'));
+    }
+  };
+
   const total = lines.reduce((s, l) => s + l.price * l.qty, 0);
   const itemCount = lines.reduce((s, l) => s + l.qty, 0);
 
@@ -251,7 +305,6 @@ const Sales = () => {
 
       {/* Compact Header */}
       <div className="bg-white border-b border-slate-200/80 px-3 py-2 sticky top-0 z-30">
-        {/* Row 1: Brand + Status */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <div className="w-8 h-8 rounded-lg bg-[#f47b20] flex items-center justify-center shrink-0">
@@ -276,7 +329,6 @@ const Sales = () => {
           </div>
         </div>
 
-        {/* Row 2: Today stats */}
         <div className="flex items-center gap-2 mt-2">
           <div className="flex-1 flex items-center justify-center gap-3 px-3 py-1.5 bg-slate-50 rounded-lg border border-slate-200">
             <div className="text-xs text-slate-500">
@@ -289,7 +341,6 @@ const Sales = () => {
           </div>
         </div>
 
-        {/* Row 3: Tabs (mobile only) */}
         <div className="lg:hidden mt-2 flex bg-slate-100 rounded-lg p-0.5">
           {[
             { id: 'services', label: 'Services', icon: 'M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z' },
@@ -317,7 +368,6 @@ const Sales = () => {
         </div>
       </div>
 
-      {/* Main — Desktop */}
       <div className="hidden lg:grid flex-1 grid-cols-12 gap-3 p-4">
         <div className="lg:col-span-7 xl:col-span-8 h-[calc(100vh-180px)] min-h-125">
           <ServiceGrid items={items} onAdd={addToCart} />
@@ -347,7 +397,6 @@ const Sales = () => {
         </div>
       </div>
 
-      {/* Main — Mobile/Tablet */}
       <div className="lg:hidden flex-1 p-3 pb-32">
         {mobileTab === 'services' && (
           <div className="h-[calc(100vh-280px)] min-h-80">
@@ -374,15 +423,14 @@ const Sales = () => {
             <RecentSalesPanel
               sales={sales}
               loading={loading}
-              onRetry={() => {}}
-              onDownloadReceipt={() => {}}
+              onRetry={handleRetrySync}
+              onDownloadReceipt={handleDownloadReceipt}
               alwaysOpen
             />
           </div>
         )}
       </div>
 
-      {/* Mobile sticky payment bar — hidden on 'sales' tab */}
       {mobileTab !== 'sales' && (
         <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-3 z-30 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
           <div className="flex items-center justify-between mb-2">
@@ -402,17 +450,15 @@ const Sales = () => {
         </div>
       )}
 
-      {/* Recent Sales — Desktop only (bottom) */}
       <div className="hidden lg:block p-3 sm:p-4 lg:pt-0">
         <RecentSalesPanel
           sales={sales}
           loading={loading}
-          onRetry={() => {}}
-          onDownloadReceipt={() => {}}
+          onRetry={handleRetrySync}
+          onDownloadReceipt={handleDownloadReceipt}
         />
       </div>
 
-      {/* Keyboard hints — desktop */}
       <div className="hidden lg:flex fixed bottom-3 right-3 items-center gap-3 bg-white/95 border border-slate-200 rounded-lg px-3 py-2 text-[10px] text-slate-500 shadow-sm z-20">
         <span className="flex items-center gap-1">
           <kbd className="px-1.5 py-0.5 bg-slate-100 border border-slate-300 rounded text-[9px] font-mono">F1</kbd> Cash
@@ -422,7 +468,6 @@ const Sales = () => {
         </span>
       </div>
 
-      {/* QR Modal */}
       {qrSession?.invoice && qrSession?.amount > 0 && (
         <QRPaymentModal
           invoice={qrSession.invoice}
@@ -435,7 +480,6 @@ const Sales = () => {
         />
       )}
 
-      {/* Receipt */}
       {showReceipt && currentSale && (
         <ThermalReceipt
           sale={currentSale}
