@@ -19,6 +19,7 @@ const Products = () => {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [editingItem, setEditingItem] = useState(null);
   const [savingProduct, setSavingProduct] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -121,6 +122,28 @@ const Products = () => {
     } finally { setSavingProduct(false); }
   };
 
+  const handleEditProduct = async (updatedProduct) => {
+    if (!updatedProduct.itemCd || !updatedProduct.itemNm) {
+      toast.error('Code and name required');
+      return;
+    }
+    setSavingProduct(true);
+    try {
+      // Force product type — this page only manages products
+      await saveItem({
+        ...updatedProduct,
+        item_type: 'product',
+        itemTyCd: '1',
+      });
+      setEditingItem(null);
+      await fetchProducts();
+      toast.success(`"${updatedProduct.itemNm}" updated`);
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to update product');
+    } finally { setSavingProduct(false); }
+  };
+
   const openMovement = (item, type = 'IN') => {
     setMovementData({
       itemCd: item.item_cd,
@@ -217,7 +240,6 @@ const Products = () => {
             <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border ${
               vscuOnline ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'
             }`}>
-              <span className={`w-2 h-2 rounded-full ${vscuOnline ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
               <span className={`text-[10px] font-semibold ${vscuOnline ? 'text-emerald-700' : 'text-rose-700'}`}>
                 {vscuOnline ? 'VSCU' : 'Offline'}
               </span>
@@ -334,6 +356,34 @@ const Products = () => {
         </div>
       )}
 
+      {/* Edit form (modal) */}
+      {editingItem && (
+        <div className="fixed inset-0 bg-black/50 flex items-start sm:items-center justify-center z-50 p-0 sm:p-4 overflow-y-auto">
+          <div className="bg-white sm:rounded-2xl shadow-2xl max-w-2xl w-full my-4">
+            <div className="flex justify-between items-center p-4 border-b border-slate-100">
+              <h2 className="text-base font-bold text-[#1a2a4a]">Edit Product</h2>
+              <button
+                onClick={() => setEditingItem(null)}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-4 max-h-[80vh] overflow-y-auto">
+              <AddItemForm
+                item={editingItem}
+                mode="product"
+                onSave={handleEditProduct}
+                onCancel={() => setEditingItem(null)}
+                isSaving={savingProduct}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* List */}
       <div className="p-3 sm:p-6 space-y-2">
         {loading ? (
@@ -400,6 +450,12 @@ const Products = () => {
 
                     {/* Actions */}
                     <div className="flex items-center gap-1.5 mt-2">
+                      <button
+                        onClick={() => setEditingItem(item)}
+                        className="flex-1 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-bold transition"
+                      >
+                        EDIT
+                      </button>
                       <button
                         onClick={() => openMovement(item, 'IN')}
                         className="flex-1 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-lg text-[10px] font-bold transition"
