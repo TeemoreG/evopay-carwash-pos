@@ -186,19 +186,19 @@ export const generateThermalReceipt = async (saleData, logoRef = null, paperWidt
     }
 
     const isNarrow = paperWidthMM <= 58;
-    const margin = 2.5;
-    const bodyFont = isNarrow ? 11.5 : 12.5;
-    const itemFont = isNarrow ? 11 : 12;
-    const titleFont = isNarrow ? 14 : 15;
-    const brandFont = isNarrow ? 15 : 16;
-    const totalFont = isNarrow ? 15 : 16;
-    const footerFont = isNarrow ? 8 : 9;
-    const qrSize = isNarrow ? 26 : 30;
-    const lineH = 4.5;
-    const itemLineH = 4.2;
+      const margin = 2.5;
+      const bodyFont = isNarrow ? 11.5 : 12.5;
+      const itemFont = isNarrow ? 10 : 11;
+      const titleFont = isNarrow ? 11.5 : 12.5;
+      const brandFont = isNarrow ? 15 : 16;
+      const totalFont = isNarrow ? 15 : 16;
+      const footerFont = isNarrow ? 8 : 9;
+      const qrSize = isNarrow ? 26 : 30;
+      const lineH = 4.5;
+      const itemLineH = 4.0;
 
     const usableWidth = paperWidthMM - margin * 2;
-    const nameColWidth = usableWidth * 0.5;
+    const nameColWidth = usableWidth * 0.46;
 
     const tempDoc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [paperWidthMM, 300] });
     tempDoc.setFont('courier', 'bold');
@@ -231,10 +231,9 @@ export const generateThermalReceipt = async (saleData, logoRef = null, paperWidt
     let y = margin + 3;
 
     const xItem = leftCol;
-    const xQty = leftCol + usableWidth * 0.60;
-    const xPrice = leftCol + usableWidth * 0.78;
-    const xTotal = rightCol;
-
+const xQty = leftCol + usableWidth * 0.54;
+const xPrice = leftCol + usableWidth * 0.74;
+const xTotal = rightCol;
     // ---- Logo ----
     if (logoEl) {
       try {
@@ -507,9 +506,9 @@ const ThermalReceipt = ({ sale, onClose, onDownload, onPrint }) => {
                   PIN: {kraPin}
                 </div>
               )}
-              <div className="text-center font-bold text-black text-base mt-2">
+              <div className="text-center font-bold text-black text-sm mt-2">
                 Invoice: {sale.invoice_no || 'N/A'}
-              </div>
+                </div>
               <hr className="border-[#1a2a4a] my-2" />
 
               <div className="text-[12px] leading-tight font-bold">
@@ -524,7 +523,7 @@ const ThermalReceipt = ({ sale, onClose, onDownload, onPrint }) => {
 
               <hr className="border-[#1a2a4a] my-2" />
 
-              <div className="flex font-bold text-[#1a2a4a] text-[12px]">
+              <div className="flex font-bold text-[#1a2a4a] text-[10px]">
                 <div className="flex-1">ITEM</div>
                 <div className="w-8 text-right">QTY</div>
                 <div className="w-14 text-right">PRICE</div>
@@ -532,7 +531,7 @@ const ThermalReceipt = ({ sale, onClose, onDownload, onPrint }) => {
               </div>
               <hr className="border-[#1a2a4a] my-1" />
 
-              <div className="text-[10px] leading-tight font-bold">
+              <div className="text-[9px] leading-tight font-bold">
                 {(sale.items || []).map((item, idx) => {
                   const qty = item.quantity || 0;
                   const price = item.price || 0;
