@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 
 import RecentSales from '../components/dashboard/RecentSales';
-import { getSales, getItems, getStock, checkVSCUStatus } from '../api/vscuApi';
+import { getSales, getItems, getStock, checkVSCUStatus, getSalesStats } from '../api/vscuApi';
 
 const PIE_COLORS = ['#f47b20', '#1a2a4a', '#10b981', '#8b5cf6', '#ec4899'];
 
@@ -22,7 +22,7 @@ const Dashboard = () => {
 
   const [stats, setStats] = useState({
     totalServices: 0, totalProducts: 0, totalSales: 0, totalRevenue: 0,
-    stockValue: 0, pendingSales: 0, todaySales: 0, totalTax: 0,
+    stockValue: 0, pendingSync: 0, todaySales: 0, totalTax: 0,
     todayRevenue: 0, avgOrderValue: 0, growthRate: 0,
     totalCustomers: 0, activeCashiers: 0,
     revenuePerCar: 0, peakHour: '—', peakHourCount: 0,
@@ -48,7 +48,7 @@ const Dashboard = () => {
   useEffect(() => {
     fetchDashboardData();
     checkVSCU();
-    intervalRef.current = setInterval(checkVSCU, 5000);
+    intervalRef.current = setInterval(checkVSCU, 30000);
     const onVis = () => document.visibilityState === 'visible' && checkVSCU();
     document.addEventListener('visibilitychange', onVis);
     return () => {
@@ -122,7 +122,7 @@ const Dashboard = () => {
 
   const calculateRepeatCustomerRate = (salesData) => {
     const counts = {};
-    salesData.forEach(s => { if (s.customer) counts[s.customer] = (counts[s.customer] || 0) + 1; });
+    salesData.forEach(s => { if (s.customer && s.customer !== 'Walk-in Customer') counts[s.customer] = (counts[s.customer] || 0) + 1; });
     const arr = Object.values(counts);
     if (!arr.length) return 0;
     return Math.round((arr.filter(c => c > 1).length / arr.length) * 100);
@@ -147,15 +147,14 @@ const Dashboard = () => {
     });
     return dates.map(dateStr => {
       const daySales = salesData.filter(s => getTs(s).slice(0, 10) === dateStr);
-      const completed = daySales.filter(s => s.status === 'Completed');
       const label = new Date(dateStr).toLocaleDateString('en-KE', {
         weekday: range === '7d' ? 'short' : 'numeric',
         month: range === '90d' ? 'short' : undefined,
       });
       return {
         date: label,
-        revenue: completed.reduce((sum, s) => sum + (s.total || 0), 0),
-        tax: completed.reduce((sum, s) => sum + (s.tax || 0), 0),
+        revenue: daySales.reduce((sum, s) => sum + (s.total || 0), 0),
+        tax: daySales.reduce((sum, s) => sum + (s.tax || 0), 0),
         salesCount: daySales.length,
       };
     });
@@ -164,38 +163,43 @@ const Dashboard = () => {
   const fetchDashboardData = async () => {
     try {
       setRefreshing(true);
-      const [salesRes, itemsRes, stockRes] = await Promise.all([
+      const [salesRes, itemsRes, stockRes, statsRes] = await Promise.all([
         getSales().catch(() => ({ data: [] })),
         getItems().catch(() => ({ data: [] })),
         getStock().catch(() => ({ data: [] })),
+        getSalesStats().catch(() => ({ data: null })),
       ]);
       const sales = salesRes.data || [];
       const items = itemsRes.data || [];
       const stock = stockRes.data || [];
+      const summary = statsRes.data || {};
 
-      const completed = sales.filter(s => s.status === 'Completed');
-      const totalRevenue = completed.reduce((s, x) => s + (x.total || 0), 0);
-      const totalTax = completed.reduce((s, x) => s + (x.tax || 0), 0);
-      const pendingSales = sales.filter(s => s.status === 'Pending').length;
+      // NOTE: GET /api/sales already filters payment_status='completed',
+      // so every sale in `sales` is a paid sale. No need to filter by s.status.
+      const totalRevenue = sales.reduce((s, x) => s + (x.total || 0), 0);
+      const totalTax = sales.reduce((s, x) => s + (x.tax || 0), 0);
+
+      // Pending sync = paid but not yet synced to VSCU
+      const pendingSync = summary.pending ?? sales.filter(s => s.status === 'Pending').length;
 
       const todayStr = new Date().toISOString().split('T')[0];
       const todayArr = sales.filter(s => getTs(s).slice(0, 10) === todayStr);
-      const todayRevenue = todayArr.filter(s => s.status === 'Completed').reduce((s, x) => s + (x.total || 0), 0);
+      const todayRevenue = todayArr.reduce((s, x) => s + (x.total || 0), 0);
 
       const now = new Date();
       const weekAgo = new Date(now); weekAgo.setDate(now.getDate() - 7);
       const monthAgo = new Date(now); monthAgo.setDate(now.getDate() - 30);
-      const weekRevenue = completed
+      const weekRevenue = sales
         .filter(s => new Date(getTs(s)) >= weekAgo)
         .reduce((sum, s) => sum + (s.total || 0), 0);
-      const monthRevenue = completed
+      const monthRevenue = sales
         .filter(s => new Date(getTs(s)) >= monthAgo)
         .reduce((sum, s) => sum + (s.total || 0), 0);
 
       const productStock = stock.filter(s => s.item_type === 'product' || s.item_ty_cd === '1');
       const stockValue = productStock.reduce((s, x) => s + (x.price || 0) * (x.stock || 0), 0);
 
-      const avgOrderValue = completed.length ? totalRevenue / completed.length : 0;
+      const avgOrderValue = sales.length ? totalRevenue / sales.length : 0;
       const revenuePerCar = avgOrderValue;
 
       const services = items.filter(i => (i.item_type || '').toLowerCase() === 'service');
@@ -206,12 +210,12 @@ const Dashboard = () => {
       const l7 = new Date(now); l7.setDate(now.getDate() - 7);
       const p7 = new Date(l7); p7.setDate(l7.getDate() - 7);
       const sum = (arr) => arr.reduce((s, x) => s + (x.total || 0), 0);
-      const last7 = sum(sales.filter(s => s.status === 'Completed' && new Date(getTs(s)) >= l7));
-      const prev7 = sum(sales.filter(s => s.status === 'Completed' && new Date(getTs(s)) >= p7 && new Date(getTs(s)) < l7));
+      const last7 = sum(sales.filter(s => new Date(getTs(s)) >= l7));
+      const prev7 = sum(sales.filter(s => new Date(getTs(s)) >= p7 && new Date(getTs(s)) < l7));
       const growthRate = prev7 > 0 ? ((last7 - prev7) / prev7) * 100 : 0;
 
       const peak = calculatePeakHour(sales);
-      const todayCompleted = todayArr.filter(s => s.status === 'Completed').length;
+      const todayCompleted = todayArr.length;
       const currentHour = new Date().getHours();
       const openHours = Math.max(currentHour - 7, 1);
       const carsPerHour = todayCompleted > 0 ? (todayCompleted / openHours).toFixed(1) : 0;
@@ -220,7 +224,7 @@ const Dashboard = () => {
       const topSvc = topSvcList[0]?.name || '—';
 
       const allItemSales = calculateTopServices(sales);
-      const serviceItems = allItemSales.filter(x => 
+      const serviceItems = allItemSales.filter(x =>
         services.some(svc => (svc.item_name || svc.itemNm) === x.name)
       );
       const productItems = allItemSales.filter(x =>
@@ -229,7 +233,7 @@ const Dashboard = () => {
 
       setStats({
         totalServices: services.length, totalProducts: products.length,
-        totalSales: sales.length, totalRevenue, stockValue, pendingSales,
+        totalSales: sales.length, totalRevenue, stockValue, pendingSync,
         todaySales: todayArr.length, totalTax, todayRevenue, avgOrderValue,
         growthRate, totalCustomers: uniqueCustomers.size, activeCashiers: uniqueCashiers.size,
         revenuePerCar: Math.round(revenuePerCar),
@@ -326,9 +330,8 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Hero Stats — 2x2 on mobile, 4-col on desktop */}
+      {/* Hero Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        {/* Today's Revenue */}
         <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
           <div className="flex items-start justify-between gap-1">
             <p className="text-xs sm:text-sm font-semibold uppercase tracking-wider text-slate-400">Today</p>
@@ -344,7 +347,6 @@ const Dashboard = () => {
           </p>
         </div>
 
-        {/* Today's Washes */}
         <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
           <div className="flex items-start justify-between gap-1">
             <p className="text-xs sm:text-sm font-semibold uppercase tracking-wider text-slate-400">Washes</p>
@@ -360,7 +362,6 @@ const Dashboard = () => {
           </p>
         </div>
 
-        {/* Avg Ticket */}
         <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
           <div className="flex items-start justify-between gap-1">
             <p className="text-xs sm:text-sm font-semibold uppercase tracking-wider text-slate-400">Avg Ticket</p>
@@ -376,22 +377,25 @@ const Dashboard = () => {
           </p>
         </div>
 
-        {/* Pending */}
         <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
           <div className="flex items-start justify-between gap-1">
-            <p className="text-xs sm:text-sm font-semibold uppercase tracking-wider text-slate-400">Pending</p>
-            <div className={`p-2 rounded-lg ${stats.pendingSales > 0 ? 'bg-amber-50' : 'bg-emerald-50'}`}>
-              <AlertTriangle className={`w-5 h-5 ${stats.pendingSales > 0 ? 'text-amber-600' : 'text-emerald-600'}`} />
+            <p className="text-xs sm:text-sm font-semibold uppercase tracking-wider text-slate-400">Pending Sync</p>
+            <div className={`p-2 rounded-lg ${stats.pendingSync > 0 ? 'bg-amber-50' : 'bg-emerald-50'}`}>
+              <AlertTriangle className={`w-5 h-5 ${stats.pendingSync > 0 ? 'text-amber-600' : 'text-emerald-600'}`} />
             </div>
           </div>
           <h3 className={`text-2xl sm:text-4xl font-extrabold mt-2 tabular-nums ${
-            stats.pendingSales > 0 ? 'text-amber-600' : 'text-emerald-600'
+            stats.pendingSync > 0 ? 'text-amber-600' : 'text-emerald-600'
           }`}>
-            {stats.pendingSales}
+            {stats.pendingSync}
           </h3>
-          <button onClick={() => navigate('/sales')} className="text-sm text-[#f47b20] font-semibold mt-2 flex items-center gap-0.5">
-            Resolve <ArrowUpRight className="w-4 h-4" />
-          </button>
+          {stats.pendingSync > 0 ? (
+            <button onClick={() => navigate('/sales')} className="text-sm text-[#f47b20] font-semibold mt-2 flex items-center gap-0.5">
+              Resolve <ArrowUpRight className="w-4 h-4" />
+            </button>
+          ) : (
+            <p className="text-sm text-emerald-600 font-semibold mt-2">All synced</p>
+          )}
         </div>
       </div>
 
@@ -442,7 +446,6 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Hourly Activity */}
         <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
           <h2 className="text-base sm:text-lg font-bold text-[#1a2a4a] flex items-center gap-2 mb-1">
             <Clock className="w-5 h-5 text-[#f47b20]" />
@@ -465,7 +468,6 @@ const Dashboard = () => {
       {/* Analytics grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-5">
 
-        {/* Payment Methods */}
         <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
           <h2 className="text-base sm:text-lg font-bold text-[#1a2a4a] flex items-center gap-2 mb-3">
             <PieChartIcon className="w-5 h-5 text-[#f47b20]" />
@@ -490,7 +492,6 @@ const Dashboard = () => {
           )}
         </div>
 
-        {/* Business Health */}
         <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
           <h2 className="text-base sm:text-lg font-bold text-[#1a2a4a] flex items-center gap-2 mb-3">
             <Activity className="w-5 h-5 text-[#f47b20]" />
@@ -541,7 +542,6 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Top Products */}
         <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
           <div className="flex justify-between items-center mb-3">
             <h2 className="text-base sm:text-lg font-bold text-[#1a2a4a] flex items-center gap-2">
@@ -586,7 +586,6 @@ const Dashboard = () => {
       {/* Recent + Top Services + Quick Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-5">
 
-        {/* Recent */}
         <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200/80 shadow-sm p-4 sm:p-5">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-3">
             <div>
@@ -610,10 +609,8 @@ const Dashboard = () => {
           <RecentSales sales={filteredSales} loading={loading} onViewAll={() => navigate('/sales')} />
         </div>
 
-        {/* Right column */}
         <div className="space-y-3 sm:space-y-5">
 
-          {/* Top Services */}
           <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-4 sm:p-5">
             <div className="flex justify-between items-center mb-3">
               <div>
@@ -657,7 +654,6 @@ const Dashboard = () => {
             )}
           </div>
 
-          {/* Quick Actions */}
           <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-4 sm:p-5">
             <h2 className="text-base sm:text-lg font-bold text-[#1a2a4a] mb-3 flex items-center gap-2">
               <Zap className="w-5 h-5 text-[#f47b20]" />
@@ -681,7 +677,6 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Footer */}
       <div className="flex flex-col sm:flex-row justify-between items-center pt-3 border-t border-slate-200 text-xs sm:text-sm text-slate-400 gap-1 text-center sm:text-left">
         <span>Updated: <strong className="text-slate-600">{lastUpdated || '...'}</strong></span>
         <span className="flex items-center gap-2">
