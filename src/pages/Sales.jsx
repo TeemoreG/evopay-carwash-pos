@@ -10,7 +10,7 @@ import {
   getItems, getSales, saveSales, checkVSCUStatus,
   getNextInvoice, createQRSession, stkPush, pollPaymentStatus,
   confirmPayment, retrySale, getSale,
-  getSaleByInvoice, cancelPaymentSession,
+  getSaleByInvoice, cancelPaymentSession, sendReceiptSms,
 } from '../api/vscuApi';
 import { useAuth } from '../context/AuthContext';
 
@@ -32,6 +32,8 @@ const Sales = () => {
   const [saving, setSaving] = useState(false);
   const [cashLoading, setCashLoading] = useState(false);
   const [qrLoading, setQrLoading] = useState(false);
+  const [smsPhone, setSmsPhone] = useState('');
+  const [smsSending, setSmsSending] = useState(false);
   const [now, setNow] = useState(new Date());
   const [mobileTab, setMobileTab] = useState('services');
 
@@ -166,6 +168,7 @@ const Sales = () => {
       const res = await saveSales(payload);
       const saved = res?.data?.sale || payload;
       setCurrentSale({ ...saved, ...payload, vscu_signature: res?.data?.signature });
+      setSmsPhone('');
       setShowReceipt(true);
       resetCart();
       fetchData();
@@ -192,7 +195,6 @@ const Sales = () => {
         return;
       }
 
-      // Option C: send cart only, no sale row yet
       await createQRSession({
         invoice_no: invoice,
         amount: Number(cart.total),
@@ -206,7 +208,6 @@ const Sales = () => {
       });
 
       resetCart();
-      // No fetchData() — no sale row exists yet
     } catch (e) {
       console.error('QR error:', e);
       toast.error('Failed to create QR session');
@@ -217,36 +218,36 @@ const Sales = () => {
   };
 
   const handleMarkPaid = async (invoice) => {
-  if (!qrSession) return;
-  try {
-    await confirmPayment(invoice, 'cash');
+    if (!qrSession) return;
+    try {
+      await confirmPayment(invoice, 'cash');
 
-    // Materialize is async — poll for the sale for up to ~5s
-    let sale = null;
-    for (let i = 0; i < 6; i++) {
-      try {
-        const sr = await getSaleByInvoice(invoice);
-        if (sr?.data?.items?.length) { sale = sr.data; break; }
-        sale = sr?.data || sale;
-      } catch (e) {
-        // ignore 404 while waiting
+      // Materialize is async — poll for the sale for up to ~5s
+      let sale = null;
+      for (let i = 0; i < 6; i++) {
+        try {
+          const sr = await getSaleByInvoice(invoice);
+          if (sr?.data?.items?.length) { sale = sr.data; break; }
+          sale = sr?.data || sale;
+        } catch (e) {
+          // ignore 404 while waiting
+        }
+        await new Promise((r) => setTimeout(r, 800));
       }
-      await new Promise((r) => setTimeout(r, 800));
+
+      const finalSale = sale || qrSession.sale;
+
+      setCurrentSale({ ...finalSale, status: 'Completed', payment_method: finalSale.payment_method || '03' });
+      setQrSession(null);
+      setSmsPhone('');
+      setShowReceipt(true);
+      fetchData();
+      toast.success('Payment confirmed');
+    } catch (e) {
+      console.error('confirm failed:', e);
+      toast.error('Failed to confirm');
     }
-
-    // Fallback to cart payload if sale never arrived
-    const finalSale = sale || qrSession.sale;
-
-    setCurrentSale({ ...finalSale, status: 'Completed', payment_method: finalSale.payment_method || '03' });
-    setQrSession(null);
-    setShowReceipt(true);
-    fetchData();
-    toast.success('Payment confirmed');
-  } catch (e) {
-    console.error('confirm failed:', e);
-    toast.error('Failed to confirm');
-  }
-};
+  };
 
   const handleSTK = async (invoice, phone) => {
     const r = await stkPush(invoice, phone);
@@ -305,6 +306,25 @@ const Sales = () => {
     }
   };
 
+  const handleSendReceiptSms = async () => {
+    if (!currentSale?.invoice_no) return toast.error('No invoice');
+    const digits = (smsPhone || '').replace(/\D/g, '');
+    if (digits.length !== 10 || !/^0[17]/.test(digits)) {
+      return toast.error('Enter a valid phone (07XX or 01XX)');
+    }
+    setSmsSending(true);
+    try {
+      await sendReceiptSms(currentSale.invoice_no, digits);
+      toast.success('Receipt SMS sent');
+      setSmsPhone('');
+    } catch (e) {
+      const msg = e?.response?.data?.error || 'Failed to send SMS';
+      toast.error(msg);
+    } finally {
+      setSmsSending(false);
+    }
+  };
+
   const total = lines.reduce((s, l) => s + l.price * l.qty, 0);
   const itemCount = lines.reduce((s, l) => s + l.qty, 0);
 
@@ -313,9 +333,7 @@ const Sales = () => {
     const todaySales = sales.filter(s =>
       (s.created_at || s.date || '').slice(0, 10) === todayStr
     );
-    const revenue = todaySales
-      .filter(s => s.status === 'Completed')
-      .reduce((sum, s) => sum + (s.total || 0), 0);
+    const revenue = todaySales.reduce((sum, s) => sum + (s.total || 0), 0);
     return { count: todaySales.length, revenue };
   }, [sales]);
 
@@ -509,7 +527,11 @@ const Sales = () => {
       {showReceipt && currentSale && (
         <ThermalReceipt
           sale={currentSale}
-          onClose={() => { setShowReceipt(false); setCurrentSale(null); }}
+          onClose={() => { setShowReceipt(false); setCurrentSale(null); setSmsPhone(''); }}
+          onSendSms={handleSendReceiptSms}
+          smsSending={smsSending}
+          smsPhone={smsPhone}
+          setSmsPhone={setSmsPhone}
         />
       )}
     </div>

@@ -1,6 +1,8 @@
 // backend/services/saleMaterializer.js
 const db = require('../db');
 const vscuClient = require('./vscuClient');
+const { sendSms, buildReceiptMessage } = require('./smsService');
+const PUBLIC_BASE_URL = process.env.VITE_PAYMENT_BASE_URL || 'https://evopay-carwash-pos.onrender.com';
 
 const round2 = (num) => Math.round((num || 0) * 100) / 100;
 
@@ -86,6 +88,8 @@ async function materializeSale(session) {
   const invoiceNo = cart.invoice_no || session.invoice_no;
   const date = cart.date || now.slice(0, 10);
 
+  console.log(`[MATERIALIZE] start invoice=${invoiceNo} items=${items.length} phone=${session.customer_phone || '-'}`);
+
   const insertResult = await db.runAsync(
     `INSERT INTO sales 
      (invoice_no, customer, customer_pin, cashier, subtotal, tax, total, payment_method,
@@ -122,7 +126,7 @@ async function materializeSale(session) {
 
   const saleId = insertResult.lastID;
 
-  // Link session → real sale_id now that it exists
+  // Link session -> real sale_id now that it exists
   await db.runAsync(
     `UPDATE payment_sessions SET sale_id = ? WHERE invoice_no = ?`,
     [saleId, invoiceNo]
@@ -146,6 +150,7 @@ async function materializeSale(session) {
     );
   }
 
+  // ---- Deduct local stock ----
   for (const item of items) {
     try {
       const meta = await db.getAsync(
@@ -165,7 +170,7 @@ async function materializeSale(session) {
         [item.item_cd, item.quantity, invoiceNo, date, now]
       );
     } catch (stockErr) {
-      console.error(`Stock deduct failed for ${item.item_cd}:`, stockErr.message);
+      console.error(`[MATERIALIZE] stock deduct failed for ${item.item_cd}:`, stockErr.message);
     }
   }
 
@@ -198,6 +203,7 @@ async function materializeSale(session) {
         synced = true;
         signature = vscuResponse.data?.rcptSign || '';
         receiptNo = vscuResponse.data?.rcptNo || vscuResponse.data?.rcptInvcNo || '';
+        console.log(`[MATERIALIZE][VSCU] synced rcptNo=${receiptNo}`);
 
         for (const item of items) {
           try {
@@ -250,7 +256,7 @@ async function materializeSale(session) {
             };
             await vscuClient.saveStock(stockPayload);
           } catch (stockSyncErr) {
-            console.error('VSCU stock push failed:', stockSyncErr.message);
+            console.error('[MATERIALIZE][VSCU] stock push failed:', stockSyncErr.message);
           }
         }
       } else {
@@ -260,6 +266,7 @@ async function materializeSale(session) {
           ['/trnsSales/saveSales', JSON.stringify(vscuPayload), `VSCU: ${errMsg}`, now]
         );
         queued = true;
+        console.warn(`[MATERIALIZE][VSCU] rejected (${errMsg}) -> queued`);
       }
     } else {
       await db.runAsync(
@@ -267,6 +274,7 @@ async function materializeSale(session) {
         ['/trnsSales/saveSales', JSON.stringify(vscuPayload), 'VSCU offline', now]
       );
       queued = true;
+      console.log(`[MATERIALIZE][VSCU] offline -> queued`);
     }
   } catch (err) {
     await db.runAsync(
@@ -274,6 +282,7 @@ async function materializeSale(session) {
       ['/trnsSales/saveSales', JSON.stringify(vscuPayload), err.message || 'Network error', now]
     );
     queued = true;
+    console.error('[MATERIALIZE][VSCU] exception -> queued:', err.message);
   }
 
   const finalStatus = synced ? 'Completed' : 'Pending';
@@ -283,6 +292,30 @@ async function materializeSale(session) {
     `UPDATE sales SET status = ?, synced = ?, vscu_signature = ?, receipt_no = ? WHERE id = ?`,
     [finalStatus, syncedFlag, signature, receiptNo, saleId]
   );
+
+  // ============================================
+  // AUTO-SEND RECEIPT SMS (if phone available)
+  // ============================================
+  const phone = session.customer_phone;
+  if (phone) {
+    const receiptUrl = `${PUBLIC_BASE_URL}/receipt/${invoiceNo}`;
+    const message = buildReceiptMessage({
+      invoiceNo,
+      amount: cart.total,
+      receiptUrl,
+    });
+    // Fire-and-forget — never block the sale response
+    sendSms({ to: phone, message, refId: `auto-${invoiceNo}` })
+      .then((r) => {
+        if (r.success) console.log(`[MATERIALIZE][SMS] auto-sent to ${phone} for ${invoiceNo}`);
+        else console.warn(`[MATERIALIZE][SMS] failed for ${invoiceNo}: ${r.error}`);
+      })
+      .catch((e) => console.error('[MATERIALIZE][SMS] exception:', e.message));
+  } else {
+    console.log(`[MATERIALIZE][SMS] skipped — no phone for ${invoiceNo}`);
+  }
+
+  console.log(`[MATERIALIZE] done saleId=${saleId} synced=${synced} queued=${queued}`);
 
   return { saleId, invoiceNo, synced, queued, signature, receiptNo, vscuResponse };
 }
