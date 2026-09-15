@@ -9,7 +9,7 @@ import ThermalReceipt, { generateThermalReceipt } from '../components/sales/Ther
 import {
   getItems, getSales, saveSales, checkVSCUStatus,
   getNextInvoice, createQRSession, stkPush, pollPaymentStatus,
-  confirmPayment, retrySale,
+  confirmPayment, retrySale, getSale,
 } from '../api/vscuApi';
 import { useAuth } from '../context/AuthContext';
 
@@ -29,6 +29,8 @@ const Sales = () => {
   const [currentSale, setCurrentSale] = useState(null);
   const [qrSession, setQrSession] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [cashLoading, setCashLoading] = useState(false);
+  const [qrLoading, setQrLoading] = useState(false);
   const [now, setNow] = useState(new Date());
   const [mobileTab, setMobileTab] = useState('services');
 
@@ -152,6 +154,7 @@ const Sales = () => {
 
   const handleCash = async () => {
     if (!lines.length) return toast.error('Add at least one item');
+    setCashLoading(true);
     setSaving(true);
     try {
       const invoice = await getInvoice();
@@ -166,11 +169,15 @@ const Sales = () => {
     } catch (e) {
       console.error(e);
       toast.error('Failed to save sale');
-    } finally { setSaving(false); }
+    } finally {
+      setCashLoading(false);
+      setSaving(false);
+    }
   };
 
   const handleQR = async () => {
     if (!lines.length) return toast.error('Add at least one item');
+    setQrLoading(true);
     setSaving(true);
     try {
       const invoice = await getInvoice();
@@ -178,7 +185,6 @@ const Sales = () => {
 
       if (!payload.total || isNaN(payload.total)) {
         toast.error('Cart total is invalid');
-        setSaving(false);
         return;
       }
 
@@ -205,7 +211,10 @@ const Sales = () => {
     } catch (e) {
       console.error('QR error:', e);
       toast.error('Failed to create QR session');
-    } finally { setSaving(false); }
+    } finally {
+      setQrLoading(false);
+      setSaving(false);
+    }
   };
 
   const handleMarkPaid = async (invoice) => {
@@ -230,9 +239,6 @@ const Sales = () => {
     return r.data;
   };
 
-  // ============================================
-  // Recent Sales — retry + download
-  // ============================================
   const handleRetrySync = async (saleId) => {
     try {
       const r = await retrySale(saleId);
@@ -250,7 +256,6 @@ const Sales = () => {
 
   const handleDownloadReceipt = async (sale) => {
     try {
-      // Load full sale with items if it doesn't have them
       let fullSale = sale;
       if (!sale.items || sale.items.length === 0) {
         const r = await getSale(sale.id);
@@ -264,7 +269,6 @@ const Sales = () => {
       const url = URL.createObjectURL(blob);
       const filename = `receipt-${sale.invoice_no || sale.id || Date.now()}.pdf`;
 
-      // Android Chrome / WebView safe download
       const a = document.createElement('a');
       a.href = url;
       a.download = filename;
@@ -274,9 +278,7 @@ const Sales = () => {
       a.click();
       document.body.removeChild(a);
 
-      // Keep blob alive for 60s — revoking too early causes silent failures on mobile
       setTimeout(() => URL.revokeObjectURL(url), 60000);
-
       toast.success('Receipt downloaded');
     } catch (e) {
       console.error('Download failed:', e);
@@ -303,7 +305,6 @@ const Sales = () => {
   return (
     <div className="min-h-screen bg-[#f8fafc] flex flex-col">
 
-      {/* Compact Header */}
       <div className="bg-white border-b border-slate-200/80 px-3 py-2 sticky top-0 z-30">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
@@ -392,6 +393,8 @@ const Sales = () => {
               disabled={!lines.length || saving}
               onCash={handleCash}
               onQR={handleQR}
+              cashLoading={cashLoading}
+              qrLoading={qrLoading}
             />
           </div>
         </div>
@@ -446,6 +449,8 @@ const Sales = () => {
             disabled={!lines.length || saving}
             onCash={handleCash}
             onQR={handleQR}
+            cashLoading={cashLoading}
+            qrLoading={qrLoading}
           />
         </div>
       )}
