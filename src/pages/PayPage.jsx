@@ -296,7 +296,7 @@ const PayPage = () => {
                       type="text"
                       value={kraPin}
                       onChange={e => setKraPin(e.target.value.toUpperCase())}
-                      placeholder="A123456789Z"
+                      placeholder="P600005678A"
                       maxLength={11}
                       disabled={isBusy || method === 'airtel'}
                       className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#f47b20] focus:border-transparent disabled:opacity-50"
