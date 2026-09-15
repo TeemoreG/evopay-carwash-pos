@@ -217,22 +217,36 @@ const Sales = () => {
   };
 
   const handleMarkPaid = async (invoice) => {
-    if (!qrSession) return;
-    try {
-      await confirmPayment(invoice, 'cash');
-      // Backend materialized the sale — fetch it for the receipt
-      let sale = qrSession.sale;
+  if (!qrSession) return;
+  try {
+    await confirmPayment(invoice, 'cash');
+
+    // Materialize is async — poll for the sale for up to ~5s
+    let sale = null;
+    for (let i = 0; i < 6; i++) {
       try {
         const sr = await getSaleByInvoice(invoice);
-        sale = sr.data || sale;
-      } catch {}
-      setCurrentSale({ ...sale, status: 'Completed', payment_method: '01' });
-      setQrSession(null);
-      setShowReceipt(true);
-      fetchData();
-      toast.success('Marked as paid');
-    } catch { toast.error('Failed to confirm'); }
-  };
+        if (sr?.data?.items?.length) { sale = sr.data; break; }
+        sale = sr?.data || sale;
+      } catch (e) {
+        // ignore 404 while waiting
+      }
+      await new Promise((r) => setTimeout(r, 800));
+    }
+
+    // Fallback to cart payload if sale never arrived
+    const finalSale = sale || qrSession.sale;
+
+    setCurrentSale({ ...finalSale, status: 'Completed', payment_method: finalSale.payment_method || '03' });
+    setQrSession(null);
+    setShowReceipt(true);
+    fetchData();
+    toast.success('Payment confirmed');
+  } catch (e) {
+    console.error('confirm failed:', e);
+    toast.error('Failed to confirm');
+  }
+};
 
   const handleSTK = async (invoice, phone) => {
     const r = await stkPush(invoice, phone);

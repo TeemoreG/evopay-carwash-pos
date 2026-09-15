@@ -5,9 +5,32 @@ import { toast } from 'react-toastify';
 import { registerPlugin, Capacitor } from '@capacitor/core';
 import { printReceipt, getCachedConfig, fetchPrinterConfig } from '../../utils/printer';
 
-// Bridge to native printer (defined in MainActivity.java)
 const NativePrinter = registerPlugin('TelpoPrinter');
 const isNative = Capacitor.isNativePlatform();
+
+// ---------- Logo (self-loading, cached) ----------
+let cachedLogo = null;
+let cachedLogoPromise = null;
+
+const loadLogoDataURL = () => {
+  if (cachedLogo) return Promise.resolve(cachedLogo);
+  if (cachedLogoPromise) return cachedLogoPromise;
+  cachedLogoPromise = new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      cachedLogo = img;
+      resolve(img);
+    };
+    img.onerror = () => {
+      console.warn('logo load failed');
+      cachedLogoPromise = null;
+      resolve(null);
+    };
+    img.src = '/evopay-logo.png';
+  });
+  return cachedLogoPromise;
+};
 
 // ---------- Helpers ----------
 const formatDateTime = (dateString) => {
@@ -83,7 +106,7 @@ const generateQRCodeDataURL = async (saleData) => {
   }
 };
 
-// Build a plain-text receipt for ESC/POS printers (native Android path)
+// Native plain-text receipt (unchanged)
 const buildPlainTextReceipt = (sale) => {
   const line = '-'.repeat(32);
   const eq = '='.repeat(32);
@@ -93,7 +116,7 @@ const buildPlainTextReceipt = (sale) => {
   const kraPin = import.meta.env.VITE_VSCU_TIN || '';
 
   let txt = '';
-  txt += '        CAR WASH\n';
+  txt += '        EVOPAY CAR WASH\n';
   txt += '      eTIMS Compliant Receipt\n';
   if (kraPin) txt += `         PIN: ${kraPin}\n`;
   txt += `Invoice: ${sale.invoice_no || 'N/A'}\n`;
@@ -124,9 +147,7 @@ const buildPlainTextReceipt = (sale) => {
   txt += `VAT (16%):`.padEnd(24) + `KES ${(sale.tax || 0).toFixed(2)}\n`;
   txt += `TOTAL:`.padEnd(24) + `KES ${(sale.total || 0).toFixed(2)}\n`;
   txt += `${eq}\n`;
-  txt += isSigned(sale)
-    ? '      KRA eTIMS Verified\n'
-    : '      Pending eTIMS sync\n';
+  txt += isSigned(sale) ? '      KRA eTIMS Verified\n' : '      Pending eTIMS sync\n';
   txt += `SCU: ${sale.scuId || 'EVO-VSCU-001'}\n`;
   txt += `CU:  ${sale.cuId || `CU-${String(Date.now()).slice(-6)}`}\n`;
   txt += `${line}\n`;
@@ -136,7 +157,7 @@ const buildPlainTextReceipt = (sale) => {
   return txt;
 };
 
-// ---------- PDF generation (58mm / 80mm aware, bold by default) ----------
+// ---------- PDF generation ----------
 export const generateThermalReceipt = async (saleData, logoRef = null, paperWidthMM = 58) => {
   try {
     const items = saleData.items || [];
@@ -156,6 +177,14 @@ export const generateThermalReceipt = async (saleData, logoRef = null, paperWidt
     let qrCodeDataURL = null;
     try { qrCodeDataURL = await generateQRCodeDataURL(saleData); } catch {}
 
+    // Self-loading logo — prefers passed logoRef if ready, else loads from disk
+    let logoEl = null;
+    if (logoRef?.current?.complete && logoRef.current.naturalWidth !== 0) {
+      logoEl = logoRef.current;
+    } else {
+      try { logoEl = await loadLogoDataURL(); } catch {}
+    }
+
     const isNarrow = paperWidthMM <= 58;
     const margin = 2.5;
     const bodyFont = isNarrow ? 11.5 : 12.5;
@@ -171,7 +200,6 @@ export const generateThermalReceipt = async (saleData, logoRef = null, paperWidt
     const usableWidth = paperWidthMM - margin * 2;
     const nameColWidth = usableWidth * 0.5;
 
-    // Measure item block
     const tempDoc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [paperWidthMM, 300] });
     tempDoc.setFont('courier', 'bold');
     tempDoc.setFontSize(itemFont);
@@ -182,7 +210,6 @@ export const generateThermalReceipt = async (saleData, logoRef = null, paperWidt
       itemsHeight += splitName.length * itemLineH + 1.5;
     });
 
-    // Generous height — over-estimate so nothing clips
     const headerHeight = 105;
     const qrBlockHeight = qrCodeDataURL ? qrSize + 14 : 0;
     const footerHeight = 22;
@@ -209,24 +236,25 @@ export const generateThermalReceipt = async (saleData, logoRef = null, paperWidt
     const xTotal = rightCol;
 
     // ---- Logo ----
-    if (logoRef?.current?.complete && logoRef.current.naturalWidth !== 0) {
-      const el = logoRef.current;
-      const logoHeight = isNarrow ? 11 : 13;
-      const logoWidth = (el.naturalWidth / el.naturalHeight) * logoHeight;
-      doc.addImage(el, 'PNG', (pageWidth - logoWidth) / 2, y, logoWidth, logoHeight);
-      y += logoHeight + 2.5;
+    if (logoEl) {
+      try {
+        const logoHeight = isNarrow ? 11 : 13;
+        const logoWidth = (logoEl.naturalWidth / logoEl.naturalHeight) * logoHeight;
+        doc.addImage(logoEl, 'PNG', (pageWidth - logoWidth) / 2, y, logoWidth, logoHeight);
+        y += logoHeight + 2.5;
+      } catch (e) {
+        console.warn('logo addImage failed:', e);
+      }
     }
 
-    // ---- Brand ----
     doc.setFont('courier', 'bold').setFontSize(brandFont).setTextColor(...blue);
-    doc.text('CAR WASH', pageWidth / 2, y, { align: 'center' });
+    doc.text('EVOPAY CAR WASH', pageWidth / 2, y, { align: 'center' });
     y += 5.5;
 
     doc.setFont('courier', 'bold').setFontSize(bodyFont).setTextColor(...black);
     doc.text('eTIMS Compliant Receipt', pageWidth / 2, y, { align: 'center' });
     y += 4.5;
 
-    // ---- KRA PIN ----
     const kraPin = import.meta.env.VITE_VSCU_TIN || '';
     if (kraPin) {
       doc.setFont('courier', 'bold').setFontSize(bodyFont).setTextColor(...black);
@@ -234,7 +262,6 @@ export const generateThermalReceipt = async (saleData, logoRef = null, paperWidt
       y += 4.5;
     }
 
-    // ---- Invoice ----
     doc.setFont('courier', 'bold').setFontSize(titleFont).setTextColor(...black);
     doc.text(`Invoice: ${saleData.invoice_no || 'N/A'}`, pageWidth / 2, y, { align: 'center' });
     y += 5.5;
@@ -242,7 +269,6 @@ export const generateThermalReceipt = async (saleData, logoRef = null, paperWidt
     doc.setDrawColor(...blue).setLineWidth(0.4).line(margin, y, pageWidth - margin, y);
     y += 4.5;
 
-    // ---- Meta ----
     doc.setFont('courier', 'bold').setFontSize(bodyFont).setTextColor(...black);
     const paymentLabel = getPaymentLabel(saleData);
     const dateStr = formatDateTime(saleData.created_at || saleData.date || new Date().toISOString());
@@ -263,7 +289,6 @@ export const generateThermalReceipt = async (saleData, logoRef = null, paperWidt
     doc.setDrawColor(...blue).line(margin, y, pageWidth - margin, y);
     y += 4.5;
 
-    // ---- Items ----
     if (items.length) {
       doc.setFont('courier', 'bold').setFontSize(itemFont).setTextColor(...blue);
       doc.text('ITEM', xItem, y);
@@ -292,7 +317,6 @@ export const generateThermalReceipt = async (saleData, logoRef = null, paperWidt
       doc.setDrawColor(...blue).line(margin, y, pageWidth - margin, y);
       y += 4.5;
 
-      // ---- Totals ----
       doc.setFont('courier', 'bold').setFontSize(bodyFont).setTextColor(...black);
       doc.text('Subtotal:', leftCol, y);
       doc.text(`KES ${subtotal.toFixed(2)}`, rightCol, y, { align: 'right' });
@@ -309,7 +333,6 @@ export const generateThermalReceipt = async (saleData, logoRef = null, paperWidt
       doc.setDrawColor(...blue).setLineWidth(0.4).line(margin, y, pageWidth - margin, y);
       y += 5;
 
-      // ---- Verification ----
       doc.setFont('courier', 'bold').setFontSize(bodyFont);
       if (signed) {
         doc.setTextColor(0, 110, 0);
@@ -320,7 +343,6 @@ export const generateThermalReceipt = async (saleData, logoRef = null, paperWidt
       }
       y += 6;
 
-      // ---- QR ----
       if (qrCodeDataURL) {
         try {
           doc.addImage(qrCodeDataURL, 'PNG', (pageWidth - qrSize) / 2, y, qrSize, qrSize);
@@ -336,7 +358,6 @@ export const generateThermalReceipt = async (saleData, logoRef = null, paperWidt
         } catch {}
       }
 
-      // ---- Footer (with extra headroom so printer can't clip) ----
       y += 2;
       doc.setFont('courier', 'bold').setFontSize(bodyFont).setTextColor(...blue);
       doc.text('Thank you for your business!', pageWidth / 2, y, { align: 'center' });
@@ -348,7 +369,6 @@ export const generateThermalReceipt = async (saleData, logoRef = null, paperWidt
         y,
         { align: 'center' }
       );
-      // explicit bottom padding so driver never trims the last lines
       y += 8;
     } else {
       doc.setFont('courier', 'bold').setFontSize(bodyFont).setTextColor(...black);
@@ -467,7 +487,6 @@ const ThermalReceipt = ({ sale, onClose, onDownload, onPrint }) => {
           <div className="max-w-[80mm] mx-auto bg-white shadow-lg">
             <div className="p-4 font-mono text-[11px] font-bold">
               <div className="flex justify-center mb-2">
-                
                 <img
                   ref={logoRef}
                   src="/evopay-logo.png"
@@ -478,7 +497,7 @@ const ThermalReceipt = ({ sale, onClose, onDownload, onPrint }) => {
               </div>
 
               <div className="text-center font-bold text-[#1a2a4a] text-sm">
-                 CAR WASH
+                EVOPAY CAR WASH
               </div>
               <div className="text-center font-bold text-black text-xs mt-1">
                 eTIMS Compliant Receipt
