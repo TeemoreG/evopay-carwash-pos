@@ -467,6 +467,7 @@ const ThermalReceipt = ({ sale, onClose, onDownload, onPrint }) => {
           <div className="max-w-[80mm] mx-auto bg-white shadow-lg">
             <div className="p-4 font-mono text-[11px] font-bold">
               <div className="flex justify-center mb-2">
+                
                 <img
                   ref={logoRef}
                   src="/evopay-logo.png"
@@ -477,7 +478,7 @@ const ThermalReceipt = ({ sale, onClose, onDownload, onPrint }) => {
               </div>
 
               <div className="text-center font-bold text-[#1a2a4a] text-sm">
-                EVOPAY CAR WASH
+                 CAR WASH
               </div>
               <div className="text-center font-bold text-black text-xs mt-1">
                 eTIMS Compliant Receipt
@@ -492,7 +493,7 @@ const ThermalReceipt = ({ sale, onClose, onDownload, onPrint }) => {
               </div>
               <hr className="border-[#1a2a4a] my-2" />
 
-              <div className="text-[10px] leading-tight font-bold">
+              <div className="text-[12px] leading-tight font-bold">
                 <div>Cashier: {sale.user_name || sale.cashier || 'Unknown'}</div>
                 <div>Customer: {sale.customer || 'Walk-in'}</div>
                 <div>Date: {formatDateTime(sale.created_at || sale.date || new Date().toISOString())}</div>
@@ -504,7 +505,7 @@ const ThermalReceipt = ({ sale, onClose, onDownload, onPrint }) => {
 
               <hr className="border-[#1a2a4a] my-2" />
 
-              <div className="flex font-bold text-[#1a2a4a] text-[10px]">
+              <div className="flex font-bold text-[#1a2a4a] text-[12px]">
                 <div className="flex-1">ITEM</div>
                 <div className="w-8 text-right">QTY</div>
                 <div className="w-14 text-right">PRICE</div>
