@@ -68,7 +68,6 @@ router.get('/next-invoice', async (req, res) => {
 });
 
 // ==================== CREATE PAYMENT SESSION ====================
-// Called once per sale. Idempotent — safe to retry.
 router.post('/qr/generate', async (req, res) => {
   try {
     const { invoice_no, amount, sale_id } = req.body;
@@ -76,7 +75,6 @@ router.post('/qr/generate', async (req, res) => {
       return res.status(400).json({ error: 'invoice_no, amount, sale_id required' });
     }
 
-    // Idempotent — return existing
     const existing = await db.getAsync(
       `SELECT * FROM payment_sessions WHERE invoice_no = ?`,
       [invoice_no]
@@ -115,8 +113,7 @@ router.post('/qr/generate', async (req, res) => {
   }
 });
 
-// ==================== M-PESA DYNAMIC QR (fast) ====================
-// Called on modal mount. Safaricom endpoint is slow (2-5s) — unavoidable.
+// ==================== M-PESA DYNAMIC QR ====================
 router.post('/qr/mpesa', async (req, res) => {
   const start = Date.now();
   try {
@@ -132,7 +129,6 @@ router.post('/qr/mpesa', async (req, res) => {
       size: '300',
     });
 
-    // Store a small slice for audit
     await db.runAsync(
       `UPDATE payment_sessions SET qr_code = ?, updated_at = datetime('now')
        WHERE invoice_no = ?`,
@@ -158,8 +154,7 @@ router.post('/qr/mpesa', async (req, res) => {
   }
 });
 
-// ==================== CUSTOM QR (cached, generated once) ====================
-// GET → returns cached data-url if exists, else generates once and stores.
+// ==================== CUSTOM QR ====================
 router.get('/qr/custom/:invoice_no', async (req, res) => {
   try {
     const { invoice_no } = req.params;
@@ -170,7 +165,6 @@ router.get('/qr/custom/:invoice_no', async (req, res) => {
     );
     if (!session) return res.status(404).json({ error: 'Session not found' });
 
-    // Return cached if exists
     if (session.qr_code && session.qr_code.startsWith('CUSTOM_QR:')) {
       return res.json({
         success: true,
@@ -181,7 +175,6 @@ router.get('/qr/custom/:invoice_no', async (req, res) => {
       });
     }
 
-    // Generate once
     const url = `${PAYMENT_BASE_URL || ''}/pay/${invoice_no}`;
     const dataUrl = await QRCode.toDataURL(url, { width: 300, margin: 2, errorCorrectionLevel: 'M' });
 
@@ -351,18 +344,13 @@ router.post('/mpesa-callback', async (req, res) => {
   }
 });
 
-// ==================== C2B CALLBACK (for Dynamic QR scans) ====================
-// Flat payload — no Body.stkCallback wrapper.
+// ==================== C2B CALLBACK ====================
 router.post('/c2b-callback', async (req, res) => {
   res.json({ ResultCode: 0, ResultDesc: 'Accepted' });
 
   try {
-    const {
-      TransID, TransAmount, BillRefNumber, MSISDN, FirstName, TransTime,
-    } = req.body || {};
-
+    const { TransID, TransAmount, BillRefNumber, MSISDN, FirstName, TransTime } = req.body || {};
     console.log('C2B callback received:', { TransID, TransAmount, BillRefNumber, MSISDN });
-
     if (!BillRefNumber) return;
 
     const session = await db.getAsync(
@@ -396,24 +384,17 @@ router.post('/c2b-callback', async (req, res) => {
   }
 });
 
-// ==================== C2B VALIDATION (Safaricom pre-check) ====================
-// Safaricom calls this BEFORE processing. Must return 0 to allow.
+// ==================== C2B VALIDATION ====================
 router.post('/c2b-validation', async (req, res) => {
   try {
     const { BillRefNumber } = req.body || {};
-    if (!BillRefNumber) {
-      return res.json({ ResultCode: 'C2B00012', ResultDesc: 'Invalid account' });
-    }
+    if (!BillRefNumber) return res.json({ ResultCode: 'C2B00012', ResultDesc: 'Invalid account' });
     const session = await db.getAsync(
       `SELECT status FROM payment_sessions WHERE invoice_no = ?`,
       [BillRefNumber]
     );
-    if (!session) {
-      return res.json({ ResultCode: 'C2B00012', ResultDesc: 'Unknown invoice' });
-    }
-    if (session.status === 'completed') {
-      return res.json({ ResultCode: 'C2B00011', ResultDesc: 'Already paid' });
-    }
+    if (!session) return res.json({ ResultCode: 'C2B00012', ResultDesc: 'Unknown invoice' });
+    if (session.status === 'completed') return res.json({ ResultCode: 'C2B00011', ResultDesc: 'Already paid' });
     res.json({ ResultCode: '0', ResultDesc: 'Accepted' });
   } catch (err) {
     console.error('c2b-validation error:', err.message);
@@ -442,8 +423,22 @@ router.post('/payment-confirm', async (req, res) => {
   }
 });
 
+// ==================== CONFIG CHECK ====================
+router.get('/mpesa/status', (req, res) => {
+  const configured = !!(CONSUMER_KEY && CONSUMER_SECRET && PASSKEY && SHORTCODE && CALLBACK_URL);
+  res.json({
+    configured,
+    env: process.env.MPESA_ENV || 'sandbox',
+    shortcode: SHORTCODE || null,
+    callback: CALLBACK_URL || null,
+    paymentBase: PAYMENT_BASE_URL || null,
+  });
+});
+
 // ==================== PUBLIC PAYMENT PAGE DATA ====================
-router.get('/pay/:invoice_no', async (req, res) => {
+// IMPORTANT: this MUST be last — it matches /:invoice_no and would shadow
+// every other route above if declared earlier.
+router.get('/:invoice_no', async (req, res) => {
   try {
     const session = await db.getAsync(
       `SELECT invoice_no, amount, status, expires_at FROM payment_sessions WHERE invoice_no = ?`,
@@ -464,18 +459,6 @@ router.get('/pay/:invoice_no', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
-});
-
-// ==================== CONFIG CHECK ====================
-router.get('/mpesa/status', (req, res) => {
-  const configured = !!(CONSUMER_KEY && CONSUMER_SECRET && PASSKEY && SHORTCODE && CALLBACK_URL);
-  res.json({
-    configured,
-    env: process.env.MPESA_ENV || 'sandbox',
-    shortcode: SHORTCODE || null,
-    callback: CALLBACK_URL || null,
-    paymentBase: PAYMENT_BASE_URL || null,
-  });
 });
 
 module.exports = router;
