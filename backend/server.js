@@ -25,7 +25,7 @@ const PORT = process.env.PORT || 3000;
 
 app.set('trust proxy', 1);
 
-// CORS — allow all origins in production (safe for this use case)
+// ==================== CORS ====================
 app.use(cors({
   origin: true,
   credentials: true,
@@ -34,19 +34,31 @@ app.use(cors({
 }));
 
 // ==================== REQUEST / RESPONSE LOGGER ====================
+// Quiet paths: health checks, root, VSCU status (frontend already shows it),
+// payment status polling (too frequent, useful info already logged at source).
+const QUIET_PATHS = [
+  '/api/health',
+  '/',
+  '/api/vscu/status',
+  '/api/pay/payment-status/',
+];
+
+const isQuietPath = (path) =>
+  QUIET_PATHS.some((p) => path === p || path.startsWith(p));
+
 app.use((req, res, next) => {
   const start = Date.now();
-  const id = Math.random().toString(36).slice(2, 8);   // short trace id
-
-  // Skip noisy health checks
-  const quiet = req.path === '/api/health' || req.path === '/';
+  const traceId = Math.random().toString(36).slice(2, 8);
+  const quiet = isQuietPath(req.path);
 
   if (!quiet) {
-    console.log(`\n[${id}] → ${req.method} ${req.originalUrl}`);
+    const ts = new Date().toISOString().slice(11, 19);
+    console.log(`${ts} [${traceId}] REQ  ${req.method} ${req.originalUrl}`);
+
     if (req.method !== 'GET' && req.body && Object.keys(req.body).length) {
-      // Trim huge payloads
-      const body = JSON.stringify(req.body);
-      console.log(`[${id}]   body: ${body.length > 500 ? body.slice(0, 500) + '…' : body}`);
+      const bodyStr = JSON.stringify(req.body);
+      const preview = bodyStr.length > 400 ? bodyStr.slice(0, 400) + '...' : bodyStr;
+      console.log(`${ts} [${traceId}] BODY ${preview}`);
     }
   }
 
@@ -54,11 +66,22 @@ app.use((req, res, next) => {
   res.json = (payload) => {
     if (!quiet) {
       const ms = Date.now() - start;
+      const ts = new Date().toISOString().slice(11, 19);
       const status = res.statusCode;
-      const summary = typeof payload === 'object'
-        ? JSON.stringify(payload).slice(0, 300)
-        : String(payload);
-      console.log(`[${id}] ← ${status} ${req.method} ${req.originalUrl} (${ms}ms) ${summary}${summary.length >= 300 ? '…' : ''}`);
+
+      let summary = '';
+      if (typeof payload === 'object' && payload !== null) {
+        try {
+          summary = JSON.stringify(payload);
+          if (summary.length > 220) summary = summary.slice(0, 220) + '...';
+        } catch {
+          summary = '[object]';
+        }
+      } else {
+        summary = String(payload);
+      }
+
+      console.log(`${ts} [${traceId}] RES  ${status} ${req.method} ${req.originalUrl} (${ms}ms) ${summary}`);
     }
     return originalJson(payload);
   };
@@ -76,6 +99,7 @@ app.use((req, res, next) => {
   next();
 });
 
+// ==================== ROUTES ====================
 app.use('/api/sales', salesRoutes);
 app.use('/api/items', itemsRoutes);
 app.use('/api/stock', stockRoutes);
@@ -152,6 +176,7 @@ app.post('/api/initializer/selectInitInfo', async (req, res) => {
   }
 });
 
+// ==================== SYNC ====================
 const db = require('./db');
 const vscuClient = require('./services/vscuClient');
 
@@ -231,16 +256,17 @@ async function processManualSync() {
 
 app._manualSync = processManualSync;
 
+// ==================== BOOT ====================
 const { connectDB } = require('./db');
 
 connectDB().then(() => {
   const server = app.listen(PORT, '0.0.0.0', () => {
-    console.log('─────────────────────────────────────────');
+    console.log('-----------------------------------------');
     console.log('  Evopay Car Wash POS API');
     console.log(`  Listening on 0.0.0.0:${PORT}`);
     console.log(`  VSCU target: ${process.env.VSCU_URL || 'not set'}`);
     console.log(`  M-Pesa env: ${process.env.MPESA_ENV || 'sandbox'}`);
-    console.log('─────────────────────────────────────────');
+    console.log('-----------------------------------------');
   });
 
   process.on('SIGTERM', () => {

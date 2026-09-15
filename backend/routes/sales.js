@@ -17,10 +17,13 @@ const extractNumericInvoice = (invoiceNo) => {
 // VSCU PROXY
 // ============================================
 router.post('/saveSales', async (req, res) => {
+  const t0 = Date.now();
   try {
     const payload = req.body;
     if (!payload.tin) payload.tin = process.env.TIN;
     if (!payload.bhfId) payload.bhfId = process.env.BHF_ID;
+
+    console.log(`[SALE][VSCU-PROXY] invcNo=${payload.invcNo} totAmt=${payload.totAmt}`);
 
     const headers = {
       tin: payload.tin,
@@ -34,8 +37,10 @@ router.post('/saveSales', async (req, res) => {
       payload,
       { headers, timeout: 30000 }
     );
+    console.log(`[SALE][VSCU-PROXY] ✓ resultCd=${response.data?.resultCd} (${Date.now() - t0}ms)`);
     res.json(response.data);
   } catch (error) {
+    console.error(`[SALE][VSCU-PROXY] ✗ (${Date.now() - t0}ms):`, error.message);
     res.status(500).json({
       resultCd: '999',
       resultMsg: error.message,
@@ -45,17 +50,18 @@ router.post('/saveSales', async (req, res) => {
 });
 
 // ============================================
-// CREATE SALE
+// CREATE SALE (cash + direct sale, not QR)
 // ============================================
 router.post('/', async (req, res) => {
-  try {
-    const {
-      invoice_no, customer, customer_pin, cashier, items,
-      subtotal, tax, total, payment_method, date, receipt,
-      sales_type, receipt_type, org_invoice_no,
-      discount_type, discount_value, remarks
-    } = req.body;
+  const t0 = Date.now();
+  const {
+    invoice_no, customer, cashier, items,
+    subtotal, tax, total, payment_method, date
+  } = req.body;
 
+  console.log(`[SALE] start invoice=${invoice_no} method=${payment_method} items=${items?.length} total=${total}`);
+
+  try {
     const invoiceNo = invoice_no && String(invoice_no).trim()
       ? String(invoice_no).trim()
       : `INV-${Date.now().toString().slice(-6)}`;
@@ -63,6 +69,7 @@ router.post('/', async (req, res) => {
     const now = new Date().toISOString();
 
     if (!items || items.length === 0) {
+      console.warn('[SALE] rejected: no items');
       return res.status(400).json({ error: 'At least one item is required' });
     }
 
@@ -75,29 +82,28 @@ router.post('/', async (req, res) => {
 
     const initialPaymentStatus = finalPaymentMethod === '01' ? 'completed' : 'pending';
 
-    // ============================================
-    // VALIDATE STOCK — products only
-    // ============================================
+    // ---- Stock validation ----
     for (const item of items) {
       const meta = await db.getAsync(
         `SELECT stock, item_name, item_type, item_ty_cd FROM items WHERE item_cd = ?`,
         [item.item_cd]
       );
       if (!meta) {
+        console.warn(`[SALE] rejected: item not found ${item.item_cd}`);
         return res.status(400).json({ error: `Item ${item.item_cd} not found` });
       }
       const isProduct = meta.item_type === 'product' || meta.item_ty_cd === '1';
       if (isProduct && meta.stock < item.quantity) {
+        console.warn(`[SALE] rejected: insufficient stock for ${meta.item_name}`);
         return res.status(400).json({
           error: `Insufficient stock for ${meta.item_name}! Available: ${meta.stock}, Requested: ${item.quantity}`
         });
       }
     }
 
-    // ============================================
-    // BUILD VSCU PAYLOAD
-    // ============================================
+    // ---- Build VSCU payload ----
     let rcptTyCd = 'S';
+    const { receipt_type, sales_type, org_invoice_no, discount_type, discount_value, remarks, customer_pin, receipt } = req.body;
     if (receipt_type === 'NC') rcptTyCd = 'C';
     else if (receipt_type === 'CS') rcptTyCd = 'C';
     else if (receipt_type === 'PS') rcptTyCd = 'P';
@@ -180,9 +186,7 @@ router.post('/', async (req, res) => {
       }))
     };
 
-    // ============================================
-    // SAVE SALE TO DB
-    // ============================================
+    // ---- Insert sale ----
     const result = await db.runAsync(
       `INSERT INTO sales 
        (invoice_no, customer, customer_pin, cashier, subtotal, tax, total, payment_method, 
@@ -215,6 +219,7 @@ router.post('/', async (req, res) => {
     );
 
     const saleId = result.lastID;
+    console.log(`[SALE] DB inserted saleId=${saleId} payment_status=${initialPaymentStatus}`);
 
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
@@ -231,10 +236,8 @@ router.post('/', async (req, res) => {
       );
     }
 
-    // ============================================
-    // DEDUCT LOCAL STOCK — always, regardless of VSCU
-    // Only for products (item_type = 'product' or item_ty_cd = '1')
-    // ============================================
+    // ---- Stock deduct ----
+    let stockAdjusted = 0;
     for (const item of items) {
       try {
         const meta = await db.getAsync(
@@ -253,32 +256,37 @@ router.post('/', async (req, res) => {
            VALUES (?, ?, 'OUT', ?, ?, ?)`,
           [item.item_cd, item.quantity, invoiceNo, date || now.slice(0, 10), now]
         );
+        stockAdjusted++;
       } catch (stockErr) {
-        console.error(`Stock deduct failed for ${item.item_cd}:`, stockErr.message);
+        console.error(`[SALE] stock deduct failed for ${item.item_cd}:`, stockErr.message);
       }
     }
+    if (stockAdjusted) console.log(`[SALE] stock adjusted for ${stockAdjusted} product(s)`);
 
-    // ============================================
-    // SYNC TO VSCU — sale + optional stock push
-    // ============================================
+    // ---- VSCU sync ----
     let synced = false;
     let queued = false;
     let vscuResponse = null;
     let signature = null;
     let receiptNo = null;
 
+    const vscuStart = Date.now();
     try {
       const status = await vscuClient.checkStatus();
+      console.log(`[SALE][VSCU] status: connected=${status.connected} online=${status.online}`);
 
       if (status.connected) {
         vscuResponse = await vscuClient.sendSale(vscuPayload);
+        console.log(`[SALE][VSCU] ← resultCd=${vscuResponse?.resultCd} resultMsg=${vscuResponse?.resultMsg || '-'}`);
 
         if (vscuResponse && (vscuResponse.resultCd === '000' || vscuResponse.resultCd === '00')) {
           synced = true;
           signature = vscuResponse.data?.rcptSign || '';
           receiptNo = vscuResponse.data?.rcptNo || vscuResponse.data?.rcptInvcNo || '';
+          console.log(`[SALE][VSCU] ✓ synced in ${Date.now() - vscuStart}ms | rcptNo=${receiptNo}`);
 
-          // Push stock movements to VSCU — best-effort, products only
+          // Push stock movements to VSCU (best-effort)
+          let stockPushed = 0;
           try {
             for (const item of items) {
               const meta = await db.getAsync(
@@ -329,9 +337,11 @@ router.post('/', async (req, res) => {
                 }]
               };
               await vscuClient.saveStock(stockPayload);
+              stockPushed++;
             }
+            if (stockPushed) console.log(`[SALE][VSCU] stock pushed for ${stockPushed} item(s)`);
           } catch (stockError) {
-            console.error('VSCU stock sync error:', stockError.message);
+            console.error('[SALE][VSCU] stock push error:', stockError.message);
           }
 
         } else {
@@ -341,6 +351,7 @@ router.post('/', async (req, res) => {
             ['/trnsSales/saveSales', JSON.stringify(vscuPayload), `VSCU: ${errorMsg}`, now]
           );
           queued = true;
+          console.warn(`[SALE][VSCU] VSCU rejected → queued. reason=${errorMsg}`);
         }
       } else {
         await db.runAsync(
@@ -348,6 +359,7 @@ router.post('/', async (req, res) => {
           ['/trnsSales/saveSales', JSON.stringify(vscuPayload), 'VSCU offline', now]
         );
         queued = true;
+        console.warn('[SALE][VSCU] VSCU offline → queued');
       }
     } catch (vscuError) {
       await db.runAsync(
@@ -355,6 +367,7 @@ router.post('/', async (req, res) => {
         ['/trnsSales/saveSales', JSON.stringify(vscuPayload), vscuError.message || 'Network error', now]
       );
       queued = true;
+      console.error('[SALE][VSCU] exception → queued:', vscuError.message);
     }
 
     const finalStatus = synced ? 'Completed' : 'Pending';
@@ -368,6 +381,8 @@ router.post('/', async (req, res) => {
     const updatedSale = await db.getAsync(`SELECT * FROM sales WHERE id = ?`, [saleId]);
     const updatedItems = await db.allAsync(`SELECT * FROM sales_items WHERE sale_id = ?`, [saleId]);
     updatedSale.items = updatedItems;
+
+    console.log(`[SALE] ✓ done saleId=${saleId} synced=${synced} queued=${queued} (${Date.now() - t0}ms)`);
 
     res.json({
       success: true,
@@ -385,7 +400,7 @@ router.post('/', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Sale error:', error);
+    console.error(`[SALE] ✗ failed (${Date.now() - t0}ms):`, error.message);
     res.status(500).json({
       error: error.message,
       stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
@@ -395,8 +410,6 @@ router.post('/', async (req, res) => {
 
 // ============================================
 // GET ALL SALES
-// Default: only completed payments.
-// ?include_pending=1 → include pending/failed.
 // ============================================
 router.get('/', async (req, res) => {
   try {
@@ -420,14 +433,16 @@ router.get('/', async (req, res) => {
       sale.items = items;
       sale.totItemCnt = items.length;
     }
+    console.log(`[SALE][LIST] returned ${rows.length} sale(s) (include_pending=${include_pending === '1'})`);
     res.json(rows);
   } catch (error) {
+    console.error('[SALE][LIST] error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
 
 // ============================================
-// GET SINGLE SALE
+// GET SINGLE SALE (by invoice)
 // ============================================
 router.get('/by-invoice/:invoice_no', async (req, res) => {
   try {
@@ -435,13 +450,18 @@ router.get('/by-invoice/:invoice_no', async (req, res) => {
       `SELECT * FROM sales WHERE invoice_no = ?`,
       [req.params.invoice_no]
     );
-    if (!sale) return res.status(404).json({ error: 'Sale not found' });
+    if (!sale) {
+      console.warn(`[SALE][BY-INVOICE] not found: ${req.params.invoice_no}`);
+      return res.status(404).json({ error: 'Sale not found' });
+    }
     const items = await db.allAsync(
       `SELECT * FROM sales_items WHERE sale_id = ?`,
       [sale.id]
     );
+    console.log(`[SALE][BY-INVOICE] ${req.params.invoice_no} → saleId=${sale.id} items=${items.length} synced=${sale.synced}`);
     res.json({ ...sale, items });
   } catch (err) {
+    console.error('[SALE][BY-INVOICE] error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -453,6 +473,7 @@ router.get('/:id', async (req, res) => {
     const items = await db.allAsync(`SELECT * FROM sales_items WHERE sale_id = ?`, [req.params.id]);
     res.json({ ...sale, items });
   } catch (error) {
+    console.error('[SALE][BY-ID] error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -461,9 +482,14 @@ router.get('/:id', async (req, res) => {
 // RETRY FAILED SYNC
 // ============================================
 router.post('/:id/retry', async (req, res) => {
+  const t0 = Date.now();
+  console.log(`[SALE][RETRY] saleId=${req.params.id}`);
   try {
     const sale = await db.getAsync(`SELECT * FROM sales WHERE id = ? AND synced = 0`, [req.params.id]);
-    if (!sale) return res.status(404).json({ error: 'Sale not found or already synced' });
+    if (!sale) {
+      console.warn(`[SALE][RETRY] not found or already synced: ${req.params.id}`);
+      return res.status(404).json({ error: 'Sale not found or already synced' });
+    }
 
     const items = await db.allAsync(`SELECT * FROM sales_items WHERE sale_id = ?`, [req.params.id]);
     const now = new Date().toISOString();
@@ -537,6 +563,7 @@ router.post('/:id/retry', async (req, res) => {
     };
 
     const vscuResponse = await vscuClient.sendSale(vscuPayload);
+    console.log(`[SALE][RETRY] ← resultCd=${vscuResponse?.resultCd} (${Date.now() - t0}ms)`);
 
     if (vscuResponse && (vscuResponse.resultCd === '000' || vscuResponse.resultCd === '00')) {
       await db.runAsync(
@@ -545,17 +572,20 @@ router.post('/:id/retry', async (req, res) => {
         [now, vscuResponse.data?.rcptSign || '',
           vscuResponse.data?.rcptNo || vscuResponse.data?.rcptInvcNo || '', req.params.id]
       );
+      console.log(`[SALE][RETRY] ✓ synced saleId=${req.params.id}`);
       res.json({ success: true, synced: true, vscuResponse });
     } else {
+      console.warn(`[SALE][RETRY] still failing for saleId=${req.params.id}`);
       res.json({ success: false, synced: false, vscuResponse });
     }
   } catch (error) {
+    console.error(`[SALE][RETRY] ✗ (${Date.now() - t0}ms):`, error.message);
     res.status(500).json({ error: error.message });
   }
 });
 
 // ============================================
-// SALES SUMMARY — only completed payments
+// SALES SUMMARY
 // ============================================
 router.get('/stats/summary', async (req, res) => {
   try {
@@ -575,15 +605,18 @@ router.get('/stats/summary', async (req, res) => {
       `SELECT SUM(tax) as tax FROM sales WHERE status = 'Completed' AND payment_status = 'completed'`
     );
 
-    res.json({
+    const summary = {
       total: total?.count || 0,
       completed: completed?.count || 0,
       pending: pendingSync?.count || 0,
       awaitingPayment: awaitingPayment?.count || 0,
       revenue: completed?.revenue || 0,
       tax: taxTotal?.tax || 0,
-    });
+    };
+    console.log('[SALE][STATS]', JSON.stringify(summary));
+    res.json(summary);
   } catch (error) {
+    console.error('[SALE][STATS] error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
