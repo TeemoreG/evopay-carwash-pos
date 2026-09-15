@@ -1,8 +1,4 @@
 // backend/services/saleMaterializer.js
-// Creates a sale row + items + stock movements + VSCU sync
-// Called AFTER payment is confirmed (QR/M-Pesa flow).
-// Cash flow does not use this — sales.js POST / handles cash directly.
-
 const db = require('../db');
 const vscuClient = require('./vscuClient');
 
@@ -83,15 +79,6 @@ async function buildVscuPayload(sale, items) {
   };
 }
 
-/**
- * Creates a sale from a stored cart payload.
- * - Inserts sales + sales_items
- * - Deducts stock for products
- * - Pushes stock to VSCU (best-effort)
- * - Syncs sale to VSCU (best-effort, queues on failure)
- *
- * Returns { saleId, invoiceNo, synced, queued, signature, receiptNo }
- */
 async function materializeSale(session) {
   const cart = JSON.parse(session.cart_payload);
   const items = cart.items || [];
@@ -99,7 +86,6 @@ async function materializeSale(session) {
   const invoiceNo = cart.invoice_no || session.invoice_no;
   const date = cart.date || now.slice(0, 10);
 
-  // ---------------- Insert sale row ----------------
   const insertResult = await db.runAsync(
     `INSERT INTO sales 
      (invoice_no, customer, customer_pin, cashier, subtotal, tax, total, payment_method,
@@ -136,7 +122,12 @@ async function materializeSale(session) {
 
   const saleId = insertResult.lastID;
 
-  // ---------------- Insert sale items ----------------
+  // Link session → real sale_id now that it exists
+  await db.runAsync(
+    `UPDATE payment_sessions SET sale_id = ? WHERE invoice_no = ?`,
+    [saleId, invoiceNo]
+  ).catch(() => {});
+
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
     await db.runAsync(
@@ -155,7 +146,6 @@ async function materializeSale(session) {
     );
   }
 
-  // ---------------- Deduct local stock ----------------
   for (const item of items) {
     try {
       const meta = await db.getAsync(
@@ -179,7 +169,6 @@ async function materializeSale(session) {
     }
   }
 
-  // ---------------- VSCU sync ----------------
   let synced = false;
   let queued = false;
   let signature = null;
@@ -210,7 +199,6 @@ async function materializeSale(session) {
         signature = vscuResponse.data?.rcptSign || '';
         receiptNo = vscuResponse.data?.rcptNo || vscuResponse.data?.rcptInvcNo || '';
 
-        // Push stock movement to VSCU
         for (const item of items) {
           try {
             const meta = await db.getAsync(

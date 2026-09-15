@@ -69,8 +69,8 @@ router.get('/next-invoice', async (req, res) => {
 });
 
 // ==================== CREATE PAYMENT SESSION (Option C) ====================
-// No sale row is created here. Cart lives in payment_sessions.cart_payload
-// until the payment is confirmed.
+// sale_id is NOT NULL in existing schema — use 0 as placeholder.
+// Real sale_id is written by saleMaterializer after payment.
 router.post('/qr/generate', async (req, res) => {
   try {
     const { invoice_no, amount, cart } = req.body;
@@ -91,12 +91,11 @@ router.post('/qr/generate', async (req, res) => {
     if (!existing) {
       await db.runAsync(
         `INSERT INTO payment_sessions
-         (invoice_no, amount, merchant_id, status, expires_at, created_at, cart_payload)
-         VALUES (?, ?, ?, 'pending', ?, datetime('now'), ?)`,
+         (invoice_no, sale_id, amount, merchant_id, status, expires_at, created_at, cart_payload)
+         VALUES (?, 0, ?, ?, 'pending', ?, datetime('now'), ?)`,
         [invoice_no, amount, SHORTCODE, expiresAt, JSON.stringify(cart)]
       );
     } else {
-      // Refresh pending sessions with new cart + expiry
       await db.runAsync(
         `UPDATE payment_sessions
          SET amount = ?, cart_payload = ?, expires_at = ?, status = 'pending',
@@ -333,7 +332,6 @@ router.post('/mpesa-callback', async (req, res) => {
         [receipt, phone, session.id]
       );
 
-      // Materialize the sale now
       try {
         await materializeSale({ ...session, transaction_id: receipt });
       } catch (e) {
@@ -426,7 +424,6 @@ router.post('/payment-confirm', async (req, res) => {
       [payment_method, invoice_no]
     );
 
-    // Materialize — since no sale row exists yet, we create it now
     let saleResult = null;
     try {
       saleResult = await materializeSale({
