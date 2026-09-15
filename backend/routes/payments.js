@@ -89,12 +89,12 @@ router.post('/qr/generate', async (req, res) => {
       : `/pay/${invoice_no}`;
 
     if (!existing) {
-      await db.runAsync(
-        `INSERT INTO payment_sessions
-         (invoice_no, sale_id, amount, merchant_id, status, expires_at, created_at, cart_payload)
-         VALUES (?, 0, ?, ?, 'pending', ?, datetime('now'), ?)`,
-        [invoice_no, amount, SHORTCODE, expiresAt, JSON.stringify(cart)]
-      );
+  await db.runAsync(
+    `INSERT INTO payment_sessions
+     (invoice_no, sale_id, amount, merchant_id, status, expires_at, created_at, cart_payload)
+     VALUES (?, NULL, ?, ?, 'pending', ?, datetime('now'), ?)`,
+    [invoice_no, amount, SHORTCODE, expiresAt, JSON.stringify(cart)]
+  );
     } else {
       await db.runAsync(
         `UPDATE payment_sessions
