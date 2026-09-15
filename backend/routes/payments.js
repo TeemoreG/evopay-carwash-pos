@@ -68,7 +68,7 @@ router.get('/next-invoice', async (req, res) => {
   }
 });
 
-// ==================== CREATE PAYMENT SESSION (Option C) ====================
+// ==================== CREATE PAYMENT SESSION====================
 // sale_id is NOT NULL in existing schema — use 0 as placeholder.
 // Real sale_id is written by saleMaterializer after payment.
 router.post('/qr/generate', async (req, res) => {
@@ -83,7 +83,7 @@ router.post('/qr/generate', async (req, res) => {
       [invoice_no]
     );
 
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
     const qrPayload = PAYMENT_BASE_URL
       ? `${PAYMENT_BASE_URL}/pay/${invoice_no}`
       : `/pay/${invoice_no}`;
