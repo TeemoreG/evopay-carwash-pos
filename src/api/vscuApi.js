@@ -293,6 +293,14 @@ export const getMpesaStatus = () => {
   return axiosInstance.get('/api/pay/mpesa/status');
 };
 
+export const cancelPaymentSession = (invoiceNo) => {
+  return axiosInstance.post(`/api/pay/cancel/${invoiceNo}`);
+};
+
+export const getSaleByInvoice = (invoiceNo) => {
+  return axiosInstance.get(`/api/sales/by-invoice/${invoiceNo}`);
+};
+
 // ============================================
 // BRANCHES (Local)
 // ============================================

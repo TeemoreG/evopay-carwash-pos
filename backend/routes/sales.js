@@ -429,6 +429,23 @@ router.get('/', async (req, res) => {
 // ============================================
 // GET SINGLE SALE
 // ============================================
+router.get('/by-invoice/:invoice_no', async (req, res) => {
+  try {
+    const sale = await db.getAsync(
+      `SELECT * FROM sales WHERE invoice_no = ?`,
+      [req.params.invoice_no]
+    );
+    if (!sale) return res.status(404).json({ error: 'Sale not found' });
+    const items = await db.allAsync(
+      `SELECT * FROM sales_items WHERE sale_id = ?`,
+      [sale.id]
+    );
+    res.json({ ...sale, items });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get('/:id', async (req, res) => {
   try {
     const sale = await db.getAsync(`SELECT * FROM sales WHERE id = ?`, [req.params.id]);

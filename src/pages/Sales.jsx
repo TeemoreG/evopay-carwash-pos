@@ -10,6 +10,7 @@ import {
   getItems, getSales, saveSales, checkVSCUStatus,
   getNextInvoice, createQRSession, stkPush, pollPaymentStatus,
   confirmPayment, retrySale, getSale,
+  getSaleByInvoice, cancelPaymentSession,
 } from '../api/vscuApi';
 import { useAuth } from '../context/AuthContext';
 
@@ -46,7 +47,10 @@ const Sales = () => {
     const onKey = (e) => {
       if (e.key === 'F1') { e.preventDefault(); if (lines.length && !saving) handleCash(); }
       if (e.key === 'F2') { e.preventDefault(); if (lines.length && !saving) handleQR(); }
-      if (e.key === 'Escape' && qrSession) setQrSession(null);
+      if (e.key === 'Escape' && qrSession) {
+        cancelPaymentSession(qrSession.invoice).catch(() => {});
+        setQrSession(null);
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -181,33 +185,28 @@ const Sales = () => {
     setSaving(true);
     try {
       const invoice = await getInvoice();
-      const payload = buildPayload(invoice, 'Pending', '03');
+      const cart = buildPayload(invoice, 'Pending', '03');
 
-      if (!payload.total || isNaN(payload.total)) {
+      if (!cart.total || isNaN(cart.total)) {
         toast.error('Cart total is invalid');
         return;
       }
 
-      const res = await saveSales(payload);
-      const saved = res?.data?.sale || payload;
-      const saleId = res?.data?.saleId || saved.id;
-      if (!saleId) throw new Error('Sale ID missing');
-
+      // Option C: send cart only, no sale row yet
       await createQRSession({
         invoice_no: invoice,
-        amount: Number(payload.total),
-        sale_id: saleId,
+        amount: Number(cart.total),
+        cart,
       });
 
       setQrSession({
         invoice: String(invoice),
-        amount: Number(payload.total),
-        saleId,
-        sale: { ...saved, ...payload },
+        amount: Number(cart.total),
+        sale: cart,
       });
 
       resetCart();
-      fetchData();
+      // No fetchData() — no sale row exists yet
     } catch (e) {
       console.error('QR error:', e);
       toast.error('Failed to create QR session');
@@ -221,7 +220,13 @@ const Sales = () => {
     if (!qrSession) return;
     try {
       await confirmPayment(invoice, 'cash');
-      setCurrentSale({ ...qrSession.sale, status: 'Completed', payment_method: '01' });
+      // Backend materialized the sale — fetch it for the receipt
+      let sale = qrSession.sale;
+      try {
+        const sr = await getSaleByInvoice(invoice);
+        sale = sr.data || sale;
+      } catch {}
+      setCurrentSale({ ...sale, status: 'Completed', payment_method: '01' });
       setQrSession(null);
       setShowReceipt(true);
       fetchData();
@@ -477,9 +482,11 @@ const Sales = () => {
         <QRPaymentModal
           invoice={qrSession.invoice}
           amount={qrSession.amount}
-          saleId={qrSession.saleId}
           onMarkPaid={handleMarkPaid}
-          onCancel={() => setQrSession(null)}
+          onCancel={async () => {
+            try { await cancelPaymentSession(qrSession.invoice); } catch {}
+            setQrSession(null);
+          }}
           onStkPush={handleSTK}
           onPoll={handlePoll}
         />

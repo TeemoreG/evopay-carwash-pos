@@ -3,6 +3,7 @@ const axios = require('axios');
 const QRCode = require('qrcode');
 const db = require('../db');
 const mpesaQr = require('../services/mpesaQr');
+const { materializeSale } = require('../services/saleMaterializer');
 
 const router = express.Router();
 
@@ -67,12 +68,14 @@ router.get('/next-invoice', async (req, res) => {
   }
 });
 
-// ==================== CREATE PAYMENT SESSION ====================
+// ==================== CREATE PAYMENT SESSION (Option C) ====================
+// No sale row is created here. Cart lives in payment_sessions.cart_payload
+// until the payment is confirmed.
 router.post('/qr/generate', async (req, res) => {
   try {
-    const { invoice_no, amount, sale_id } = req.body;
-    if (!invoice_no || !amount || !sale_id) {
-      return res.status(400).json({ error: 'invoice_no, amount, sale_id required' });
+    const { invoice_no, amount, cart } = req.body;
+    if (!invoice_no || !amount || !cart) {
+      return res.status(400).json({ error: 'invoice_no, amount, cart required' });
     }
 
     const existing = await db.getAsync(
@@ -88,16 +91,20 @@ router.post('/qr/generate', async (req, res) => {
     if (!existing) {
       await db.runAsync(
         `INSERT INTO payment_sessions
-         (invoice_no, sale_id, amount, merchant_id, status, expires_at, created_at)
-         VALUES (?, ?, ?, ?, 'pending', ?, datetime('now'))`,
-        [invoice_no, sale_id, amount, SHORTCODE, expiresAt]
+         (invoice_no, amount, merchant_id, status, expires_at, created_at, cart_payload)
+         VALUES (?, ?, ?, 'pending', ?, datetime('now'), ?)`,
+        [invoice_no, amount, SHORTCODE, expiresAt, JSON.stringify(cart)]
+      );
+    } else {
+      // Refresh pending sessions with new cart + expiry
+      await db.runAsync(
+        `UPDATE payment_sessions
+         SET amount = ?, cart_payload = ?, expires_at = ?, status = 'pending',
+             updated_at = datetime('now')
+         WHERE invoice_no = ?`,
+        [amount, JSON.stringify(cart), expiresAt, invoice_no]
       );
     }
-
-    await db.runAsync(
-      `UPDATE sales SET qr_code = ?, payment_status = 'pending' WHERE invoice_no = ?`,
-      [qrPayload, invoice_no]
-    ).catch(() => {});
 
     res.json({
       success: true,
@@ -326,12 +333,12 @@ router.post('/mpesa-callback', async (req, res) => {
         [receipt, phone, session.id]
       );
 
-      await db.runAsync(
-        `UPDATE sales SET status = 'Completed', payment_method = '03',
-                          payment_status = 'completed', mpesa_transaction_id = ?
-         WHERE invoice_no = ?`,
-        [receipt, session.invoice_no]
-      ).catch(() => {});
+      // Materialize the sale now
+      try {
+        await materializeSale({ ...session, transaction_id: receipt });
+      } catch (e) {
+        console.error(`[materializeSale failed] invoice=${session.invoice_no}:`, e.message);
+      }
     } else {
       const status = resultCode === 1032 ? 'cancelled' : 'failed';
       await db.runAsync(
@@ -349,8 +356,8 @@ router.post('/c2b-callback', async (req, res) => {
   res.json({ ResultCode: 0, ResultDesc: 'Accepted' });
 
   try {
-    const { TransID, TransAmount, BillRefNumber, MSISDN, FirstName, TransTime } = req.body || {};
-    console.log('C2B callback received:', { TransID, TransAmount, BillRefNumber, MSISDN });
+    const { TransID, BillRefNumber, MSISDN } = req.body || {};
+    console.log('C2B callback received:', { TransID, BillRefNumber, MSISDN });
     if (!BillRefNumber) return;
 
     const session = await db.getAsync(
@@ -371,12 +378,11 @@ router.post('/c2b-callback', async (req, res) => {
       [TransID, MSISDN, session.id]
     );
 
-    await db.runAsync(
-      `UPDATE sales SET status = 'Completed', payment_method = '03',
-                        payment_status = 'completed', mpesa_transaction_id = ?
-       WHERE invoice_no = ?`,
-      [TransID, BillRefNumber]
-    ).catch(() => {});
+    try {
+      await materializeSale({ ...session, transaction_id: TransID });
+    } catch (e) {
+      console.error(`[materializeSale failed] invoice=${BillRefNumber}:`, e.message);
+    }
 
     console.log(`C2B confirmed: ${BillRefNumber} → ${TransID}`);
   } catch (err) {
@@ -406,17 +412,48 @@ router.post('/c2b-validation', async (req, res) => {
 router.post('/payment-confirm', async (req, res) => {
   try {
     const { invoice_no, payment_method = 'cash' } = req.body;
+
+    const session = await db.getAsync(
+      `SELECT * FROM payment_sessions WHERE invoice_no = ?`,
+      [invoice_no]
+    );
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+
     await db.runAsync(
       `UPDATE payment_sessions
        SET status = 'completed', payment_method = ?, updated_at = datetime('now')
        WHERE invoice_no = ?`,
       [payment_method, invoice_no]
     );
+
+    // Materialize — since no sale row exists yet, we create it now
+    let saleResult = null;
+    try {
+      saleResult = await materializeSale({
+        ...session,
+        payment_method: payment_method === 'cash' ? '01' : '03',
+        transaction_id: null,
+      });
+    } catch (e) {
+      console.error(`[materializeSale failed] invoice=${invoice_no}:`, e.message);
+    }
+
+    res.json({ success: true, sale: saleResult });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==================== CANCEL SESSION ====================
+router.post('/cancel/:invoice_no', async (req, res) => {
+  try {
+    const { invoice_no } = req.params;
     await db.runAsync(
-      `UPDATE sales SET status = 'Completed', payment_method = ?, payment_status = 'completed'
-       WHERE invoice_no = ?`,
-      [payment_method === 'cash' ? '01' : '03', invoice_no]
-    ).catch(() => {});
+      `UPDATE payment_sessions
+       SET status = 'cancelled', updated_at = datetime('now')
+       WHERE invoice_no = ? AND status IN ('pending', 'processing')`,
+      [invoice_no]
+    );
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -436,8 +473,6 @@ router.get('/mpesa/status', (req, res) => {
 });
 
 // ==================== PUBLIC PAYMENT PAGE DATA ====================
-// IMPORTANT: this MUST be last — it matches /:invoice_no and would shadow
-// every other route above if declared earlier.
 router.get('/:invoice_no', async (req, res) => {
   try {
     const session = await db.getAsync(
