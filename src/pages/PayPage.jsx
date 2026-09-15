@@ -102,7 +102,7 @@ const PayPage = () => {
     if (!navigator.share) return toast.info('Share not supported on this device');
     try {
       await navigator.share({
-        title: `Evopay Car Wash — Invoice ${invoice}`,
+        title: `Car Wash — Invoice ${invoice}`,
         text: `Pay KES ${Number(session.amount).toLocaleString()} for invoice ${invoice}`,
         url: window.location.href,
       });
@@ -169,7 +169,7 @@ const PayPage = () => {
         <div className="bg-[#1a2a4a] px-5 sm:px-6 py-5 text-white relative">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <h1 className="text-lg font-bold truncate">Evopay Car Wash</h1>
+              <h1 className="text-lg font-bold truncate">  Car Wash</h1>
               <div className="flex items-center gap-1.5 mt-0.5">
                 <p className="text-xs text-white/60 font-mono truncate">{invoice}</p>
                 <button

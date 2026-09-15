@@ -153,7 +153,7 @@ export function buildEscPos(sale, width = 80) {
   alignCenter();
   boldOn();
   sizeDWH();
-  line('EVOPAY CAR WASH');
+  line(' CAR WASH');
   sizeDH();
   line('eTIMS Compliant Receipt');
   sizeNormal();
