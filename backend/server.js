@@ -33,6 +33,39 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'tin', 'bhfId', 'cmckey', 'Origin', 'Accept'],
 }));
 
+// ==================== REQUEST / RESPONSE LOGGER ====================
+app.use((req, res, next) => {
+  const start = Date.now();
+  const id = Math.random().toString(36).slice(2, 8);   // short trace id
+
+  // Skip noisy health checks
+  const quiet = req.path === '/api/health' || req.path === '/';
+
+  if (!quiet) {
+    console.log(`\n[${id}] → ${req.method} ${req.originalUrl}`);
+    if (req.method !== 'GET' && req.body && Object.keys(req.body).length) {
+      // Trim huge payloads
+      const body = JSON.stringify(req.body);
+      console.log(`[${id}]   body: ${body.length > 500 ? body.slice(0, 500) + '…' : body}`);
+    }
+  }
+
+  const originalJson = res.json.bind(res);
+  res.json = (payload) => {
+    if (!quiet) {
+      const ms = Date.now() - start;
+      const status = res.statusCode;
+      const summary = typeof payload === 'object'
+        ? JSON.stringify(payload).slice(0, 300)
+        : String(payload);
+      console.log(`[${id}] ← ${status} ${req.method} ${req.originalUrl} (${ms}ms) ${summary}${summary.length >= 300 ? '…' : ''}`);
+    }
+    return originalJson(payload);
+  };
+
+  next();
+});
+
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
