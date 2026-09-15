@@ -4,7 +4,7 @@ import { toast } from 'react-toastify';
 import { getPublicPayment, stkPush, pollPaymentStatus } from '../api/vscuApi';
 
 const MPESA_ICON = 'https://res.cloudinary.com/dvqjgbdhp/image/upload/v1789068986/MWMP_gf84uc.svg';
-const AIRTEL_ICON = 'https://res.cloudinary.com/dvqjgbdhp/image/upload/v1789069305/330201734627_amm_c0dzym.jpg';
+const AIRTEL_ICON = 'https://res.cloudinary.com/dvqjgbdhp/image/upload/v1789463153/422-4221364_send-cash-to-ghana-airtel-logo-new-hd_scmhh9.png';
 const CARD_ICON = 'https://res.cloudinary.com/dvqjgbdhp/image/upload/v1789069363/visa-mastercard-logos_mpvf6q.jpg';
 
 const PayPage = () => {
