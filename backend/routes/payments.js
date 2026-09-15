@@ -17,22 +17,22 @@ const BASE_URL = process.env.MPESA_ENV === 'production'
   ? 'https://api.safaricom.co.ke'
   : 'https://sandbox.safaricom.co.ke';
 
-if (!SHORTCODE) console.warn('[PAY] WARN: MPESA_SHORTCODE not set');
-if (!CALLBACK_URL) console.warn('[PAY] WARN: MPESA_CALLBACK_URL not set — STK will fail');
-if (!PAYMENT_BASE_URL) console.warn('[PAY] WARN: VITE_PAYMENT_BASE_URL not set — QR falls back to relative');
+if (!SHORTCODE) console.warn('WARN: MPESA_SHORTCODE not set');
+if (!CALLBACK_URL) console.warn('WARN: MPESA_CALLBACK_URL not set — STK will fail');
+if (!PAYMENT_BASE_URL) console.warn('[WARN: VITE_PAYMENT_BASE_URL not set — QR falls back to relative');
 
-console.log(`[PAY] M-Pesa env: ${process.env.MPESA_ENV || 'sandbox'} | base: ${BASE_URL}`);
-console.log(`[PAY] Shortcode: ${SHORTCODE || 'MISSING'} | Callback: ${CALLBACK_URL || 'MISSING'}`);
+console.log(`M-Pesa env: ${process.env.MPESA_ENV || 'sandbox'} | base: ${BASE_URL}`);
+console.log(`Shortcode: ${SHORTCODE || 'MISSING'} | Callback: ${CALLBACK_URL || 'MISSING'}`);
 
 let mpesaAccessToken = null;
 let mpesaTokenExpiry = 0;
 
 async function getMpesaAccessToken() {
   if (mpesaAccessToken && Date.now() < mpesaTokenExpiry - 60000) {
-    console.log('[PAY][TOKEN] using cached token');
+    console.log('[TOKEN] using cached token');
     return mpesaAccessToken;
   }
-  console.log('[PAY][TOKEN] fetching new M-Pesa access token');
+  console.log('[TOKEN] fetching new M-Pesa access token');
   const auth = Buffer.from(`${CONSUMER_KEY}:${CONSUMER_SECRET}`).toString('base64');
   const res = await axios.get(
     `${BASE_URL}/oauth/v1/generate?grant_type=client_credentials`,
@@ -41,7 +41,7 @@ async function getMpesaAccessToken() {
   if (!res.data?.access_token) throw new Error('No access token from M-PESA');
   mpesaAccessToken = res.data.access_token;
   mpesaTokenExpiry = Date.now() + res.data.expires_in * 1000;
-  console.log('[PAY][TOKEN] new token acquired, expires in', res.data.expires_in, 's');
+  console.log('[TOKEN] new token acquired, expires in', res.data.expires_in, 's');
   return mpesaAccessToken;
 }
 
@@ -68,10 +68,10 @@ router.get('/next-invoice', async (req, res) => {
     );
     const next = String((row?.c || 0) + 1).padStart(4, '0');
     const invoice_no = `CW-${today}-${next}`;
-    console.log(`[PAY][NEXT-INVOICE] generated: ${invoice_no}`);
+    console.log(`[NEXT-INVOICE] generated: ${invoice_no}`);
     res.json({ invoice_no });
   } catch (err) {
-    console.error('[PAY][NEXT-INVOICE] error:', err.message);
+    console.error('[NEXT-INVOICE] error:', err.message);
     res.status(500).json({ error: 'Failed to generate invoice number', details: err.message });
   }
 });
@@ -80,11 +80,11 @@ router.get('/next-invoice', async (req, res) => {
 router.post('/qr/generate', async (req, res) => {
   const t0 = Date.now();
   const { invoice_no, amount, cart } = req.body || {};
-  console.log(`[PAY][QR-GEN] start invoice=${invoice_no} amount=${amount} items=${cart?.items?.length || 0}`);
+  console.log(`[QR-GEN] start invoice=${invoice_no} amount=${amount} items=${cart?.items?.length || 0}`);
 
   try {
     if (!invoice_no || !amount || !cart) {
-      console.warn('[PAY][QR-GEN] missing params');
+      console.warn('[QR-GEN] missing params');
       return res.status(400).json({ error: 'invoice_no, amount, cart required' });
     }
 
@@ -92,7 +92,7 @@ router.post('/qr/generate', async (req, res) => {
       `SELECT * FROM payment_sessions WHERE invoice_no = ?`,
       [invoice_no]
     );
-    console.log(`[PAY][QR-GEN] existing session: ${existing ? 'yes' : 'no'}`);
+    console.log(`[QR-GEN] existing session: ${existing ? 'yes' : 'no'}`);
 
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
     const qrPayload = PAYMENT_BASE_URL
@@ -106,7 +106,7 @@ router.post('/qr/generate', async (req, res) => {
          VALUES (?, NULL, ?, ?, 'pending', ?, datetime('now'), ?)`,
         [invoice_no, amount, SHORTCODE, expiresAt, JSON.stringify(cart)]
       );
-      console.log(`[PAY][QR-GEN] inserted new session, expires ${expiresAt}`);
+      console.log(`[QR-GEN] inserted new session, expires ${expiresAt}`);
     } else {
       await db.runAsync(
         `UPDATE payment_sessions
@@ -115,10 +115,10 @@ router.post('/qr/generate', async (req, res) => {
          WHERE invoice_no = ?`,
         [amount, JSON.stringify(cart), expiresAt, invoice_no]
       );
-      console.log(`[PAY][QR-GEN] updated existing session, expires ${expiresAt}`);
+      console.log(`[QR-GEN] updated existing session, expires ${expiresAt}`);
     }
 
-    console.log(`[PAY][QR-GEN] ✓ done in ${Date.now() - t0}ms`);
+    console.log(`[QR-GEN] ✓ done in ${Date.now() - t0}ms`);
     res.json({
       success: true,
       invoice_no,
@@ -128,7 +128,7 @@ router.post('/qr/generate', async (req, res) => {
       existing: !!existing,
     });
   } catch (err) {
-    console.error(`[PAY][QR-GEN] ✗ error (${Date.now() - t0}ms):`, err.message);
+    console.error(`[QR-GEN] ✗ error (${Date.now() - t0}ms):`, err.message);
     res.status(500).json({ error: 'Failed to create session', details: err.message });
   }
 });
@@ -137,11 +137,11 @@ router.post('/qr/generate', async (req, res) => {
 router.post('/qr/mpesa', async (req, res) => {
   const start = Date.now();
   const { invoice_no, amount } = req.body || {};
-  console.log(`[PAY][MPESA-QR] start invoice=${invoice_no} amount=${amount}`);
+  console.log(`[MPESA-QR] start invoice=${invoice_no} amount=${amount}`);
 
   try {
     if (!invoice_no || !amount) {
-      console.warn('[PAY][MPESA-QR] missing params');
+      console.warn('[MPESA-QR] missing params');
       return res.status(400).json({ error: 'invoice_no and amount required' });
     }
 
@@ -158,7 +158,7 @@ router.post('/qr/mpesa', async (req, res) => {
       [`MPESA_QR:${(result.QRCode || '').slice(0, 80)}`, invoice_no]
     ).catch(() => {});
 
-    console.log(`[PAY][MPESA-QR] ✓ done in ${Date.now() - start}ms | requestId=${result.RequestID}`);
+    console.log(`[MPESA-QR] ✓ done in ${Date.now() - start}ms | requestId=${result.RequestID}`);
 
     res.json({
       success: true,
@@ -169,7 +169,7 @@ router.post('/qr/mpesa', async (req, res) => {
       ms: Date.now() - start,
     });
   } catch (err) {
-    console.error(`[PAY][MPESA-QR] ✗ error (${Date.now() - start}ms):`, err.response?.data || err.message);
+    console.error(`[MPESA-QR] ✗ error (${Date.now() - start}ms):`, err.response?.data || err.message);
     res.status(500).json({
       error: 'Failed to generate M-Pesa QR',
       details: err.response?.data || err.message,
@@ -186,12 +186,12 @@ router.get('/qr/custom/:invoice_no', async (req, res) => {
       [invoice_no]
     );
     if (!session) {
-      console.warn(`[PAY][CUSTOM-QR] no session for ${invoice_no}`);
+      console.warn(`[CUSTOM-QR] no session for ${invoice_no}`);
       return res.status(404).json({ error: 'Session not found' });
     }
 
     if (session.qr_code && session.qr_code.startsWith('CUSTOM_QR:')) {
-      console.log(`[PAY][CUSTOM-QR] returning cached for ${invoice_no}`);
+      console.log(`[CUSTOM-QR] returning cached for ${invoice_no}`);
       return res.json({
         success: true,
         mode: 'custom',
@@ -209,7 +209,7 @@ router.get('/qr/custom/:invoice_no', async (req, res) => {
       [`CUSTOM_QR:${dataUrl}`, invoice_no]
     );
 
-    console.log(`[PAY][CUSTOM-QR] generated fresh for ${invoice_no}`);
+    console.log(`[CUSTOM-QR] generated fresh for ${invoice_no}`);
     res.json({
       success: true,
       mode: 'custom',
@@ -218,7 +218,7 @@ router.get('/qr/custom/:invoice_no', async (req, res) => {
       cached: false,
     });
   } catch (err) {
-    console.error(`[PAY][CUSTOM-QR] error for ${invoice_no}:`, err.message);
+    console.error(`[CUSTOM-QR] error for ${invoice_no}:`, err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -231,10 +231,10 @@ router.get('/qr/:invoice_no', async (req, res) => {
       [req.params.invoice_no]
     );
     if (!session) return res.status(404).json({ error: 'Not found' });
-    console.log(`[PAY][GET-SESSION] ${req.params.invoice_no} → status=${session.status}`);
+    console.log(`[GET-SESSION] ${req.params.invoice_no} → status=${session.status}`);
     res.json(session);
   } catch (err) {
-    console.error(`[PAY][GET-SESSION] error:`, err.message);
+    console.error(`[GET-SESSION] error:`, err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -247,13 +247,13 @@ router.get('/payment-status/:invoice_no', async (req, res) => {
       [req.params.invoice_no]
     );
     if (!session) {
-      console.warn(`[PAY][POLL] no session for ${req.params.invoice_no}`);
+      console.warn(`[POLL] no session for ${req.params.invoice_no}`);
       return res.status(404).json({ error: 'Not found' });
     }
-    console.log(`[PAY][POLL] ${req.params.invoice_no} → status=${session.status} txn=${session.transaction_id || '-'}`);
+    console.log(`[POLL] ${req.params.invoice_no} → status=${session.status} txn=${session.transaction_id || '-'}`);
     res.json(session);
   } catch (err) {
-    console.error('[PAY][POLL] error:', err.message);
+    console.error(`[POLL] error:`, err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -262,15 +262,15 @@ router.get('/payment-status/:invoice_no', async (req, res) => {
 router.post('/stk-push', async (req, res) => {
   const t0 = Date.now();
   const { invoice_no, phone } = req.body || {};
-  console.log(`[PAY][STK] start invoice=${invoice_no} phone=${phone}`);
+  console.log(`[STK] start invoice=${invoice_no} phone=${phone}`);
 
   try {
     if (!invoice_no || !phone) {
-      console.warn('[PAY][STK] missing invoice_no or phone');
+      console.warn('[STK] missing invoice_no or phone');
       return res.status(400).json({ error: 'invoice_no and phone required' });
     }
     if (!CALLBACK_URL) {
-      console.error('[PAY][STK] MPESA_CALLBACK_URL not configured');
+      console.error('[STK] MPESA_CALLBACK_URL not configured');
       return res.status(500).json({ error: 'MPESA_CALLBACK_URL not configured' });
     }
 
@@ -279,11 +279,11 @@ router.post('/stk-push', async (req, res) => {
       [invoice_no]
     );
     if (!session) {
-      console.warn(`[PAY][STK] no session for ${invoice_no}`);
+      console.warn(`[STK] no session for ${invoice_no}`);
       return res.status(404).json({ error: 'Session not found' });
     }
     if (session.status === 'completed') {
-      console.warn(`[PAY][STK] already paid: ${invoice_no}`);
+      console.warn(`[STK] already paid: ${invoice_no}`);
       return res.status(400).json({ error: 'Already paid' });
     }
 
@@ -306,7 +306,7 @@ router.post('/stk-push', async (req, res) => {
       TransactionDesc: `Car Wash ${invoice_no.substring(0, 10)}`,
     };
 
-    console.log(`[PAY][STK] → sending to Safaricom: amount=${payload.Amount} partyA=${formattedPhone} ref=${payload.AccountReference}`);
+    console.log(`[STK] → sending to Safaricom: amount=${payload.Amount} partyA=${formattedPhone} ref=${payload.AccountReference}`);
 
     const response = await axios.post(
       `${BASE_URL}/mpesa/stkpush/v1/processrequest`,
@@ -314,7 +314,7 @@ router.post('/stk-push', async (req, res) => {
       { headers: { Authorization: `Bearer ${token}` }, timeout: 15000 }
     );
 
-    console.log(`[PAY][STK] ← Safaricom response: code=${response.data?.ResponseCode} desc=${response.data?.ResponseDescription} checkoutId=${response.data?.CheckoutRequestID}`);
+    console.log(`[STK] ← Safaricom response: code=${response.data?.ResponseCode} desc=${response.data?.ResponseDescription} checkoutId=${response.data?.CheckoutRequestID}`);
 
     if (response.data?.ResponseCode !== '0') {
       throw new Error(response.data?.ResponseDescription || 'STK rejected');
@@ -328,14 +328,14 @@ router.post('/stk-push', async (req, res) => {
       [formattedPhone, response.data.CheckoutRequestID, invoice_no]
     );
 
-    console.log(`[PAY][STK] ✓ done in ${Date.now() - t0}ms | checkoutId=${response.data.CheckoutRequestID}`);
+    console.log(`[STK] ✓ done in ${Date.now() - t0}ms | checkoutId=${response.data.CheckoutRequestID}`);
     res.json({
       success: true,
       checkout_request_id: response.data.CheckoutRequestID,
       message: response.data.CustomerMessage,
     });
   } catch (err) {
-    console.error(`[PAY][STK] ✗ failed (${Date.now() - t0}ms):`, err.response?.data || err.message);
+    console.error(`[STK] ✗ failed (${Date.now() - t0}ms):`, err.response?.data || err.message);
     await db.runAsync(
       `UPDATE payment_sessions SET status = 'failed', updated_at = datetime('now') WHERE invoice_no = ?`,
       [invoice_no]
@@ -347,8 +347,8 @@ router.post('/stk-push', async (req, res) => {
 // ==================== M-PESA STK CALLBACK ====================
 router.post('/mpesa-callback', async (req, res) => {
   console.log('════════════════════════════════════════════');
-  console.log('[PAY][CALLBACK] ⬅ Received from Safaricom');
-  console.log('[PAY][CALLBACK] body:', JSON.stringify(req.body).slice(0, 800));
+  console.log('[CALLBACK] ⬅ Received from Safaricom');
+  console.log('[CALLBACK] body:', JSON.stringify(req.body).slice(0, 800));
   console.log('════════════════════════════════════════════');
 
   res.json({ ResultCode: 0, ResultDesc: 'Accepted' });
@@ -356,24 +356,24 @@ router.post('/mpesa-callback', async (req, res) => {
   try {
     const cb = req.body?.Body?.stkCallback;
     if (!cb) {
-      console.warn('[PAY][CALLBACK] no stkCallback in body');
+      console.warn('[CALLBACK] no stkCallback in body');
       return;
     }
 
     const checkoutId = cb.CheckoutRequestID;
     const resultCode = cb.ResultCode;
 
-    console.log(`[PAY][CALLBACK] checkoutId=${checkoutId} resultCd=${resultCode} resultDesc=${cb.ResultDesc}`);
+    console.log(`[CALLBACK] checkoutId=${checkoutId} resultCd=${resultCode} resultDesc=${cb.ResultDesc}`);
 
     const session = await db.getAsync(
       `SELECT * FROM payment_sessions WHERE mpesa_checkout_id = ?`,
       [checkoutId]
     );
     if (!session) {
-      console.warn(`[PAY][CALLBACK] no session for checkoutId=${checkoutId}`);
+      console.warn(`[CALLBACK] no session for checkoutId=${checkoutId}`);
       return;
     }
-    console.log(`[PAY][CALLBACK] matched session invoice=${session.invoice_no}`);
+    console.log(`[CALLBACK] matched session invoice=${session.invoice_no}`);
 
     if (resultCode === 0) {
       const items = cb.CallbackMetadata?.Item || [];
@@ -381,7 +381,7 @@ router.post('/mpesa-callback', async (req, res) => {
       const phone = items.find(i => i.Name === 'PhoneNumber')?.Value || null;
       const amount = items.find(i => i.Name === 'Amount')?.Value || null;
 
-      console.log(`[PAY][CALLBACK] ✓ SUCCESS receipt=${receipt} amount=${amount} phone=${phone}`);
+      console.log(`[CALLBACK] ✓ SUCCESS receipt=${receipt} amount=${amount} phone=${phone}`);
 
       await db.runAsync(
         `UPDATE payment_sessions
@@ -393,37 +393,37 @@ router.post('/mpesa-callback', async (req, res) => {
 
       try {
         const result = await materializeSale({ ...session, transaction_id: receipt });
-        console.log(`[PAY][CALLBACK] materialized saleId=${result.saleId} synced=${result.synced} queued=${result.queued}`);
+        console.log(`[CALLBACK] materialized saleId=${result.saleId} synced=${result.synced} queued=${result.queued}`);
       } catch (e) {
-        console.error(`[PAY][CALLBACK] materializeSale failed:`, e.message);
+        console.error(`[CALLBACK] materializeSale failed:`, e.message);
       }
     } else {
       const status = resultCode === 1032 ? 'cancelled' : 'failed';
-      console.log(`[PAY][CALLBACK] ✗ FAILED code=${resultCode} desc=${cb.ResultDesc} → status=${status}`);
+      console.log(`[CALLBACK] ✗ FAILED code=${resultCode} desc=${cb.ResultDesc} → status=${status}`);
       await db.runAsync(
         `UPDATE payment_sessions SET status = ?, updated_at = datetime('now') WHERE id = ?`,
         [status, session.id]
       );
     }
   } catch (err) {
-    console.error('[PAY][CALLBACK] exception:', err.message, err.stack);
+    console.error('[CALLBACK] exception:', err.message, err.stack);
   }
 });
 
 // ==================== C2B CALLBACK ====================
 router.post('/c2b-callback', async (req, res) => {
   console.log('════════════════════════════════════════════');
-  console.log('[PAY][C2B] ⬅ Received from Safaricom');
-  console.log('[PAY][C2B] body:', JSON.stringify(req.body).slice(0, 800));
+  console.log('[C2B] ⬅ Received from Safaricom');
+  console.log('[C2B] body:', JSON.stringify(req.body).slice(0, 800));
   console.log('════════════════════════════════════════════');
 
   res.json({ ResultCode: 0, ResultDesc: 'Accepted' });
 
   try {
     const { TransID, BillRefNumber, MSISDN, TransAmount, FirstName } = req.body || {};
-    console.log(`[PAY][C2B] txn=${TransID} ref=${BillRefNumber} amount=${TransAmount} from=${MSISDN} (${FirstName})`);
+    console.log(`[C2B] txn=${TransID} ref=${BillRefNumber} amount=${TransAmount} from=${MSISDN} (${FirstName})`);
     if (!BillRefNumber) {
-      console.warn('[PAY][C2B] no BillRefNumber');
+      console.warn('[C2B] no BillRefNumber');
       return;
     }
 
@@ -432,11 +432,11 @@ router.post('/c2b-callback', async (req, res) => {
       [BillRefNumber]
     );
     if (!session) {
-      console.warn(`[PAY][C2B] no session for invoice ${BillRefNumber}`);
+      console.warn(`[C2B] no session for invoice ${BillRefNumber}`);
       return;
     }
     if (session.status === 'completed') {
-      console.log(`[PAY][C2B] session already completed for ${BillRefNumber}`);
+      console.log(`[C2B] session already completed for ${BillRefNumber}`);
       return;
     }
 
@@ -450,24 +450,24 @@ router.post('/c2b-callback', async (req, res) => {
 
     try {
       const result = await materializeSale({ ...session, transaction_id: TransID });
-      console.log(`[PAY][C2B] materialized saleId=${result.saleId} synced=${result.synced}`);
+      console.log(`[C2B] materialized saleId=${result.saleId} synced=${result.synced}`);
     } catch (e) {
-      console.error(`[PAY][C2B] materializeSale failed:`, e.message);
+      console.error(`[C2B] materializeSale failed:`, e.message);
     }
 
-    console.log(`[PAY][C2B] ✓ confirmed ${BillRefNumber} → ${TransID}`);
+    console.log(`[C2B] ✓ confirmed ${BillRefNumber} → ${TransID}`);
   } catch (err) {
-    console.error('[PAY][C2B] exception:', err.message);
+    console.error('[C2B] exception:', err.message);
   }
 });
 
 // ==================== C2B VALIDATION ====================
 router.post('/c2b-validation', async (req, res) => {
   const { BillRefNumber } = req.body || {};
-  console.log(`[PAY][C2B-VALIDATE] invoice=${BillRefNumber}`);
+  console.log(`[C2B-VALIDATE] invoice=${BillRefNumber}`);
   try {
     if (!BillRefNumber) {
-      console.warn('[PAY][C2B-VALIDATE] no BillRefNumber');
+      console.warn('[C2B-VALIDATE] no BillRefNumber');
       return res.json({ ResultCode: 'C2B00012', ResultDesc: 'Invalid account' });
     }
     const session = await db.getAsync(
@@ -475,17 +475,17 @@ router.post('/c2b-validation', async (req, res) => {
       [BillRefNumber]
     );
     if (!session) {
-      console.warn(`[PAY][C2B-VALIDATE] unknown invoice ${BillRefNumber}`);
+      console.warn(`[C2B-VALIDATE] unknown invoice ${BillRefNumber}`);
       return res.json({ ResultCode: 'C2B00012', ResultDesc: 'Unknown invoice' });
     }
     if (session.status === 'completed') {
-      console.warn(`[PAY][C2B-VALIDATE] already paid ${BillRefNumber}`);
+      console.warn(`[C2B-VALIDATE] already paid ${BillRefNumber}`);
       return res.json({ ResultCode: 'C2B00011', ResultDesc: 'Already paid' });
     }
-    console.log(`[PAY][C2B-VALIDATE] ✓ accepted ${BillRefNumber}`);
+    console.log(`[C2B-VALIDATE] ✓ accepted ${BillRefNumber}`);
     res.json({ ResultCode: '0', ResultDesc: 'Accepted' });
   } catch (err) {
-    console.error('[PAY][C2B-VALIDATE] error:', err.message);
+    console.error('[C2B-VALIDATE] error:', err.message);
     res.json({ ResultCode: 'C2B00013', ResultDesc: 'Server error' });
   }
 });
@@ -493,7 +493,7 @@ router.post('/c2b-validation', async (req, res) => {
 // ==================== CASHIER MANUAL CONFIRM ====================
 router.post('/payment-confirm', async (req, res) => {
   const { invoice_no, payment_method = 'cash' } = req.body || {};
-  console.log(`[PAY][CONFIRM] invoice=${invoice_no} method=${payment_method}`);
+  console.log(`[CONFIRM] invoice=${invoice_no} method=${payment_method}`);
 
   try {
     const session = await db.getAsync(
@@ -501,7 +501,7 @@ router.post('/payment-confirm', async (req, res) => {
       [invoice_no]
     );
     if (!session) {
-      console.warn(`[PAY][CONFIRM] no session for ${invoice_no}`);
+      console.warn(`[CONFIRM] no session for ${invoice_no}`);
       return res.status(404).json({ error: 'Session not found' });
     }
 
@@ -519,14 +519,14 @@ router.post('/payment-confirm', async (req, res) => {
         payment_method: payment_method === 'cash' ? '01' : '03',
         transaction_id: null,
       });
-      console.log(`[PAY][CONFIRM] ✓ materialized saleId=${saleResult.saleId}`);
+      console.log(`[CONFIRM] ✓ materialized saleId=${saleResult.saleId}`);
     } catch (e) {
-      console.error(`[PAY][CONFIRM] materializeSale failed:`, e.message);
+      console.error(`[CONFIRM] materializeSale failed:`, e.message);
     }
 
     res.json({ success: true, sale: saleResult });
   } catch (err) {
-    console.error('[PAY][CONFIRM] error:', err.message);
+    console.error('[CONFIRM] error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -534,7 +534,7 @@ router.post('/payment-confirm', async (req, res) => {
 // ==================== CANCEL SESSION ====================
 router.post('/cancel/:invoice_no', async (req, res) => {
   const { invoice_no } = req.params;
-  console.log(`[PAY][CANCEL] invoice=${invoice_no}`);
+  console.log(`[CANCEL] invoice=${invoice_no}`);
   try {
     const result = await db.runAsync(
       `UPDATE payment_sessions
@@ -542,10 +542,10 @@ router.post('/cancel/:invoice_no', async (req, res) => {
        WHERE invoice_no = ? AND status IN ('pending', 'processing')`,
       [invoice_no]
     );
-    console.log(`[PAY][CANCEL] ✓ rows affected=${result.changes || 0}`);
+    console.log(`[CANCEL] ✓ rows affected=${result.changes || 0}`);
     res.json({ success: true });
   } catch (err) {
-    console.error('[PAY][CANCEL] error:', err.message);
+    console.error('[CANCEL] error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -553,7 +553,7 @@ router.post('/cancel/:invoice_no', async (req, res) => {
 // ==================== CONFIG CHECK ====================
 router.get('/mpesa/status', (req, res) => {
   const configured = !!(CONSUMER_KEY && CONSUMER_SECRET && PASSKEY && SHORTCODE && CALLBACK_URL);
-  console.log(`[PAY][STATUS] config check → configured=${configured}`);
+  console.log(`[STATUS] config check → configured=${configured}`);
   res.json({
     configured,
     env: process.env.MPESA_ENV || 'sandbox',
@@ -572,13 +572,13 @@ router.get('/:invoice_no', async (req, res) => {
       [invoice_no]
     );
     if (!session) {
-      console.warn(`[PAY][PUBLIC] no session for ${invoice_no}`);
+      console.warn(`[PUBLIC] no session for ${invoice_no}`);
       return res.status(404).json({ error: 'Payment not found' });
     }
 
     const expired = new Date(session.expires_at) < new Date();
     if (expired && session.status === 'pending') {
-      console.log(`[PAY][PUBLIC] session expired, marking expired: ${invoice_no}`);
+      console.log(`[PUBLIC] session expired, marking expired: ${invoice_no}`);
       await db.runAsync(
         `UPDATE payment_sessions SET status = 'expired' WHERE invoice_no = ?`,
         [session.invoice_no]
@@ -586,10 +586,10 @@ router.get('/:invoice_no', async (req, res) => {
       session.status = 'expired';
     }
 
-    console.log(`[PAY][PUBLIC] ${invoice_no} → status=${session.status}`);
+    console.log(`[PUBLIC] ${invoice_no} → status=${session.status}`);
     res.json(session);
   } catch (err) {
-    console.error(`[PAY][PUBLIC] error for ${invoice_no}:`, err.message);
+    console.error(`[PUBLIC] error for ${invoice_no}:`, err.message);
     res.status(500).json({ error: err.message });
   }
 });
