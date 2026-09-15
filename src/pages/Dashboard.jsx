@@ -117,7 +117,6 @@ const Dashboard = () => {
       const d = new Date(getTs(s));
       if (!isNaN(d.getTime())) buckets[d.getHours()].count += 1;
     });
-    // Trim to business hours only (6am–10pm)
     return buckets.filter(b => b.hour >= 6 && b.hour <= 22);
   };
 
@@ -183,7 +182,6 @@ const Dashboard = () => {
       const todayArr = sales.filter(s => getTs(s).slice(0, 10) === todayStr);
       const todayRevenue = todayArr.filter(s => s.status === 'Completed').reduce((s, x) => s + (x.total || 0), 0);
 
-      // Week + month totals
       const now = new Date();
       const weekAgo = new Date(now); weekAgo.setDate(now.getDate() - 7);
       const monthAgo = new Date(now); monthAgo.setDate(now.getDate() - 30);
@@ -221,7 +219,6 @@ const Dashboard = () => {
       const topSvcList = calculateTopServices(sales);
       const topSvc = topSvcList[0]?.name || '—';
 
-      // Separate top services (item_type=service) vs top products
       const allItemSales = calculateTopServices(sales);
       const serviceItems = allItemSales.filter(x => 
         services.some(svc => (svc.item_name || svc.itemNm) === x.name)
@@ -277,9 +274,9 @@ const Dashboard = () => {
     if (!active || !payload?.length) return null;
     return (
       <div className="bg-white p-3 rounded-lg shadow-lg border border-slate-200">
-        <p className="text-xs font-semibold text-slate-500">{label}</p>
+        <p className="text-sm font-semibold text-slate-500">{label}</p>
         {payload.map((e, i) => (
-          <p key={i} className="text-sm font-bold" style={{ color: e.color }}>
+          <p key={i} className="text-base font-bold" style={{ color: e.color }}>
             {e.name}: {e.name === 'Washes' ? e.value : `KES ${e.value.toLocaleString()}`}
           </p>
         ))}
@@ -291,8 +288,8 @@ const Dashboard = () => {
     if (!active || !payload?.length) return null;
     return (
       <div className="bg-white p-2 rounded-lg shadow-lg border border-slate-200">
-        <p className="text-[10px] font-semibold text-slate-500">{label}</p>
-        <p className="text-xs font-bold text-[#f47b20]">{payload[0].value} washes</p>
+        <p className="text-xs font-semibold text-slate-500">{label}</p>
+        <p className="text-sm font-bold text-[#f47b20]">{payload[0].value} washes</p>
       </div>
     );
   };
@@ -303,97 +300,97 @@ const Dashboard = () => {
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 bg-white p-3 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
         <div>
-          <h1 className="text-lg sm:text-2xl font-bold text-[#1a2a4a]">Car Wash POS</h1>
-          <p className="text-slate-500 text-[11px] sm:text-sm mt-0.5">Live overview of your wash business</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-[#1a2a4a]">Car Wash POS</h1>
+          <p className="text-slate-500 text-sm mt-0.5">Live overview of your wash business</p>
         </div>
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-          <div className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] sm:text-sm font-medium border ${
+          <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-medium border ${
             stats.growthRate > 0 ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
             : stats.growthRate < 0 ? 'bg-rose-50 text-rose-700 border-rose-200'
             : 'bg-slate-50 text-slate-600 border-slate-200'
           }`}>
-            {stats.growthRate < 0 ? <ArrowDownRight className="w-3.5 h-3.5" /> : <TrendingUp className="w-3.5 h-3.5" />}
+            {stats.growthRate < 0 ? <ArrowDownRight className="w-4 h-4" /> : <TrendingUp className="w-4 h-4" />}
             <span>{stats.growthRate > 0 ? '+' : ''}{stats.growthRate.toFixed(1)}%</span>
           </div>
           <button
             onClick={() => { fetchDashboardData(); checkVSCU(); }}
             disabled={refreshing}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] sm:text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg border border-slate-200/60 disabled:opacity-50"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg border border-slate-200/60 disabled:opacity-50"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
           </button>
-          <div className="text-[11px] sm:text-sm text-slate-600 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-200 font-medium flex items-center gap-1.5">
-            <Calendar className="w-3.5 h-3.5" />
-            <span className="truncate max-w-[120px] sm:max-w-none">{todayFormatted}</span>
+          <div className="text-sm text-slate-600 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-200 font-medium flex items-center gap-1.5">
+            <Calendar className="w-4 h-4" />
+            <span className="truncate max-w-[140px] sm:max-w-none">{todayFormatted}</span>
           </div>
         </div>
       </div>
 
       {/* Hero Stats — 2x2 on mobile, 4-col on desktop */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* Today's Revenue */}
-        <div className="bg-white p-3 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
+        <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
           <div className="flex items-start justify-between gap-1">
-            <p className="text-[9px] sm:text-xs font-semibold uppercase tracking-wider text-slate-400">Today</p>
-            <div className="p-1.5 bg-orange-50 rounded-lg">
-              <Banknote className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#f47b20]" />
+            <p className="text-xs sm:text-sm font-semibold uppercase tracking-wider text-slate-400">Today</p>
+            <div className="p-2 bg-orange-50 rounded-lg">
+              <Banknote className="w-5 h-5 text-[#f47b20]" />
             </div>
           </div>
-          <h3 className="text-base sm:text-2xl font-extrabold text-[#1a2a4a] mt-1.5 tabular-nums break-words leading-tight">
+          <h3 className="text-2xl sm:text-4xl font-extrabold text-[#1a2a4a] mt-2 tabular-nums break-words leading-tight">
             KES {stats.todayRevenue.toLocaleString()}
           </h3>
-          <p className="text-[10px] sm:text-xs text-slate-500 mt-1">
+          <p className="text-sm text-slate-500 mt-2">
             Week: <span className="font-semibold text-slate-700">KES {stats.weekRevenue.toLocaleString()}</span>
           </p>
         </div>
 
         {/* Today's Washes */}
-        <div className="bg-white p-3 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
+        <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
           <div className="flex items-start justify-between gap-1">
-            <p className="text-[9px] sm:text-xs font-semibold uppercase tracking-wider text-slate-400">Washes</p>
-            <div className="p-1.5 bg-orange-50 rounded-lg">
-              <Car className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#f47b20]" />
+            <p className="text-xs sm:text-sm font-semibold uppercase tracking-wider text-slate-400">Washes</p>
+            <div className="p-2 bg-orange-50 rounded-lg">
+              <Car className="w-5 h-5 text-[#f47b20]" />
             </div>
           </div>
-          <h3 className="text-base sm:text-2xl font-extrabold text-[#1a2a4a] mt-1.5 tabular-nums">
+          <h3 className="text-2xl sm:text-4xl font-extrabold text-[#1a2a4a] mt-2 tabular-nums">
             {stats.todaySales}
           </h3>
-          <p className="text-[10px] sm:text-xs text-slate-500 mt-1">
+          <p className="text-sm text-slate-500 mt-2">
             {stats.carsPerHour} <span className="text-slate-400">cars/hr</span>
           </p>
         </div>
 
         {/* Avg Ticket */}
-        <div className="bg-white p-3 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
+        <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
           <div className="flex items-start justify-between gap-1">
-            <p className="text-[9px] sm:text-xs font-semibold uppercase tracking-wider text-slate-400">Avg Ticket</p>
-            <div className="p-1.5 bg-emerald-50 rounded-lg">
-              <Target className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600" />
+            <p className="text-xs sm:text-sm font-semibold uppercase tracking-wider text-slate-400">Avg Ticket</p>
+            <div className="p-2 bg-emerald-50 rounded-lg">
+              <Target className="w-5 h-5 text-emerald-600" />
             </div>
           </div>
-          <h3 className="text-base sm:text-2xl font-extrabold text-[#1a2a4a] mt-1.5 tabular-nums break-words leading-tight">
+          <h3 className="text-2xl sm:text-4xl font-extrabold text-[#1a2a4a] mt-2 tabular-nums break-words leading-tight">
             KES {Math.round(stats.avgOrderValue).toLocaleString()}
           </h3>
-          <p className="text-[10px] sm:text-xs text-slate-500 mt-1 truncate">
+          <p className="text-sm text-slate-500 mt-2 truncate">
             Peak: {stats.peakHour}
           </p>
         </div>
 
         {/* Pending */}
-        <div className="bg-white p-3 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
+        <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
           <div className="flex items-start justify-between gap-1">
-            <p className="text-[9px] sm:text-xs font-semibold uppercase tracking-wider text-slate-400">Pending</p>
-            <div className={`p-1.5 rounded-lg ${stats.pendingSales > 0 ? 'bg-amber-50' : 'bg-emerald-50'}`}>
-              <AlertTriangle className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${stats.pendingSales > 0 ? 'text-amber-600' : 'text-emerald-600'}`} />
+            <p className="text-xs sm:text-sm font-semibold uppercase tracking-wider text-slate-400">Pending</p>
+            <div className={`p-2 rounded-lg ${stats.pendingSales > 0 ? 'bg-amber-50' : 'bg-emerald-50'}`}>
+              <AlertTriangle className={`w-5 h-5 ${stats.pendingSales > 0 ? 'text-amber-600' : 'text-emerald-600'}`} />
             </div>
           </div>
-          <h3 className={`text-base sm:text-2xl font-extrabold mt-1.5 tabular-nums ${
+          <h3 className={`text-2xl sm:text-4xl font-extrabold mt-2 tabular-nums ${
             stats.pendingSales > 0 ? 'text-amber-600' : 'text-emerald-600'
           }`}>
             {stats.pendingSales}
           </h3>
-          <button onClick={() => navigate('/sales')} className="text-[10px] sm:text-xs text-[#f47b20] font-semibold mt-1 flex items-center gap-0.5">
-            Resolve <ArrowUpRight className="w-3 h-3" />
+          <button onClick={() => navigate('/sales')} className="text-sm text-[#f47b20] font-semibold mt-2 flex items-center gap-0.5">
+            Resolve <ArrowUpRight className="w-4 h-4" />
           </button>
         </div>
       </div>
@@ -401,21 +398,21 @@ const Dashboard = () => {
       {/* Revenue Trend + Hourly chart */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-5">
 
-        <div className="lg:col-span-2 bg-white p-3 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
+        <div className="lg:col-span-2 bg-white p-4 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-3">
             <div>
-              <h2 className="text-sm sm:text-base font-bold text-[#1a2a4a] flex items-center gap-2">
-                <BarChart3 className="w-4 h-4 text-[#f47b20]" />
+              <h2 className="text-base sm:text-lg font-bold text-[#1a2a4a] flex items-center gap-2">
+                <BarChart3 className="w-5 h-5 text-[#f47b20]" />
                 Revenue Trend
               </h2>
-              <p className="text-[10px] sm:text-xs text-slate-400">Daily revenue and wash count</p>
+              <p className="text-xs sm:text-sm text-slate-400">Daily revenue and wash count</p>
             </div>
             <div className="flex bg-slate-100 rounded-lg p-0.5 self-start sm:self-auto">
               {['7d', '30d', '90d'].map(r => (
                 <button
                   key={r}
                   onClick={() => { setTimeRange(r); setTimeout(fetchDashboardData, 0); }}
-                  className={`px-2.5 py-1 text-[10px] sm:text-xs font-medium rounded-md transition ${
+                  className={`px-3 py-1 text-xs sm:text-sm font-medium rounded-md transition ${
                     timeRange === r ? 'bg-white text-[#1a2a4a] shadow-sm' : 'text-slate-500'
                   }`}
                 >
@@ -425,38 +422,38 @@ const Dashboard = () => {
             </div>
           </div>
 
-          <div className="h-48 sm:h-64 w-full">
+          <div className="h-52 sm:h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={chartData} margin={{ top: 10, right: 5, left: -15, bottom: 0 }}>
+              <ComposedChart data={chartData} margin={{ top: 10, right: 5, left: -10, bottom: 0 }}>
                 <defs>
                   <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#f47b20" stopOpacity={0.25} />
                     <stop offset="95%" stopColor="#f47b20" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <XAxis dataKey="date" stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} />
-                <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false}
+                <XAxis dataKey="date" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
+                <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false}
                   tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
                 <Tooltip content={<TrendTooltip />} />
                 <Area type="monotone" dataKey="revenue" stroke="#f47b20" strokeWidth={2.5} fillOpacity={1} fill="url(#colorRev)" name="Revenue" />
-                <Line type="monotone" dataKey="salesCount" stroke="#10b981" strokeWidth={2} dot={{ fill: '#10b981', r: 3 }} name="Washes" />
+                <Line type="monotone" dataKey="salesCount" stroke="#10b981" strokeWidth={2} dot={{ fill: '#10b981', r: 4 }} name="Washes" />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
         </div>
 
         {/* Hourly Activity */}
-        <div className="bg-white p-3 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
-          <h2 className="text-sm sm:text-base font-bold text-[#1a2a4a] flex items-center gap-2 mb-1">
-            <Clock className="w-4 h-4 text-[#f47b20]" />
+        <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
+          <h2 className="text-base sm:text-lg font-bold text-[#1a2a4a] flex items-center gap-2 mb-1">
+            <Clock className="w-5 h-5 text-[#f47b20]" />
             Hourly Activity
           </h2>
-          <p className="text-[10px] sm:text-xs text-slate-400 mb-3">Washes by hour of day</p>
-          <div className="h-40 sm:h-52">
+          <p className="text-xs sm:text-sm text-slate-400 mb-3">Washes by hour of day</p>
+          <div className="h-44 sm:h-52">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={hourlyData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
-                <XAxis dataKey="label" stroke="#94a3b8" fontSize={9} tickLine={false} axisLine={false} />
-                <YAxis stroke="#94a3b8" fontSize={9} tickLine={false} axisLine={false} allowDecimals={false} />
+              <BarChart data={hourlyData} margin={{ top: 5, right: 5, left: -15, bottom: 0 }}>
+                <XAxis dataKey="label" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
+                <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} />
                 <Tooltip content={<HourTooltip />} cursor={{ fill: '#f47b20', opacity: 0.1 }} />
                 <Bar dataKey="count" fill="#1a2a4a" radius={[3, 3, 0, 0]} />
               </BarChart>
@@ -469,89 +466,89 @@ const Dashboard = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-5">
 
         {/* Payment Methods */}
-        <div className="bg-white p-3 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
-          <h2 className="text-sm sm:text-base font-bold text-[#1a2a4a] flex items-center gap-2 mb-3">
-            <PieChartIcon className="w-4 h-4 text-[#f47b20]" />
+        <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
+          <h2 className="text-base sm:text-lg font-bold text-[#1a2a4a] flex items-center gap-2 mb-3">
+            <PieChartIcon className="w-5 h-5 text-[#f47b20]" />
             Payment Methods
           </h2>
           {salesByPayment.length > 0 ? (
-            <div className="h-44">
+            <div className="h-48">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={salesByPayment} cx="50%" cy="50%" innerRadius={40} outerRadius={60} paddingAngle={2} dataKey="value">
+                  <Pie data={salesByPayment} cx="50%" cy="50%" innerRadius={45} outerRadius={65} paddingAngle={2} dataKey="value">
                     {salesByPayment.map((_, i) => (
                       <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                     ))}
                   </Pie>
-                  <Legend iconType="circle" iconSize={6} verticalAlign="bottom"
-                    formatter={(v) => <span className="text-[10px] text-slate-600">{v}</span>} />
+                  <Legend iconType="circle" iconSize={8} verticalAlign="bottom"
+                    formatter={(v) => <span className="text-xs sm:text-sm text-slate-600">{v}</span>} />
                 </PieChart>
               </ResponsiveContainer>
             </div>
           ) : (
-            <div className="text-center py-8 text-slate-400 text-xs">No data yet</div>
+            <div className="text-center py-8 text-slate-400 text-sm">No data yet</div>
           )}
         </div>
 
         {/* Business Health */}
-        <div className="bg-white p-3 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
-          <h2 className="text-sm sm:text-base font-bold text-[#1a2a4a] flex items-center gap-2 mb-3">
-            <Activity className="w-4 h-4 text-[#f47b20]" />
+        <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
+          <h2 className="text-base sm:text-lg font-bold text-[#1a2a4a] flex items-center gap-2 mb-3">
+            <Activity className="w-5 h-5 text-[#f47b20]" />
             Business Health
           </h2>
 
           <div className="p-3 bg-slate-50 rounded-lg border border-slate-100 mb-3">
             <div className="flex justify-between items-center mb-2">
-              <span className="text-xs font-semibold text-slate-600">Daily Target</span>
-              <span className="text-sm font-bold text-[#1a2a4a]">
+              <span className="text-sm font-semibold text-slate-600">Daily Target</span>
+              <span className="text-base font-bold text-[#1a2a4a]">
                 {Math.min(Math.round((stats.todayRevenue / 10000) * 100), 100)}%
               </span>
             </div>
-            <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+            <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
               <div className="h-full rounded-full bg-linear-to-r from-[#f47b20] to-[#1a2a4a] transition-all duration-700"
                 style={{ width: `${Math.min((stats.todayRevenue / 10000) * 100, 100)}%` }} />
             </div>
-            <p className="text-[10px] text-slate-400 mt-2">
+            <p className="text-xs text-slate-400 mt-2">
               KES {stats.todayRevenue.toLocaleString()} / KES 10,000
             </p>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 text-xs">
+          <div className="grid grid-cols-3 gap-2 text-sm">
             <div className="text-center p-2 bg-slate-50 rounded-lg">
-              <p className="text-[9px] text-slate-400 uppercase">Customers</p>
-              <p className="font-bold text-slate-700">{stats.totalCustomers}</p>
+              <p className="text-xs text-slate-400 uppercase">Customers</p>
+              <p className="font-bold text-slate-700 text-base">{stats.totalCustomers}</p>
             </div>
             <div className="text-center p-2 bg-slate-50 rounded-lg">
-              <p className="text-[9px] text-slate-400 uppercase">Cashiers</p>
-              <p className="font-bold text-slate-700">{stats.activeCashiers}</p>
+              <p className="text-xs text-slate-400 uppercase">Cashiers</p>
+              <p className="font-bold text-slate-700 text-base">{stats.activeCashiers}</p>
             </div>
             <div className="text-center p-2 bg-slate-50 rounded-lg">
-              <p className="text-[9px] text-slate-400 uppercase">Repeat</p>
-              <p className="font-bold text-slate-700">{repeatCustomerRate}%</p>
+              <p className="text-xs text-slate-400 uppercase">Repeat</p>
+              <p className="font-bold text-slate-700 text-base">{repeatCustomerRate}%</p>
             </div>
           </div>
 
           <div className="flex items-center justify-between mt-3 p-2 bg-slate-50 rounded-lg">
-            <span className="text-xs font-semibold text-slate-600">VSCU</span>
-            <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${
+            <span className="text-sm font-semibold text-slate-600">VSCU</span>
+            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
               vscuStatus.connected ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
             }`}>
-              {vscuStatus.checking ? <RefreshCw className="w-3 h-3 animate-spin" />
-                : vscuStatus.connected ? <CheckCircle2 className="w-3.5 h-3.5" />
-                : <XCircle className="w-3.5 h-3.5" />}
+              {vscuStatus.checking ? <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                : vscuStatus.connected ? <CheckCircle2 className="w-4 h-4" />
+                : <XCircle className="w-4 h-4" />}
               {vscuStatus.checking ? 'Checking' : vscuStatus.connected ? 'Online' : 'Offline'}
             </span>
           </div>
         </div>
 
         {/* Top Products */}
-        <div className="bg-white p-3 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
+        <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
           <div className="flex justify-between items-center mb-3">
-            <h2 className="text-sm sm:text-base font-bold text-[#1a2a4a] flex items-center gap-2">
-              <Trophy className="w-4 h-4 text-[#f47b20]" />
+            <h2 className="text-base sm:text-lg font-bold text-[#1a2a4a] flex items-center gap-2">
+              <Trophy className="w-5 h-5 text-[#f47b20]" />
               Top Products
             </h2>
-            <button onClick={() => navigate('/stock')} className="text-xs text-[#f47b20] font-semibold">
+            <button onClick={() => navigate('/stock')} className="text-sm text-[#f47b20] font-semibold">
               All →
             </button>
           </div>
@@ -560,23 +557,23 @@ const Dashboard = () => {
               <div className="h-6 w-6 border-2 border-[#f47b20] border-t-transparent rounded-full animate-spin"></div>
             </div>
           ) : topProducts.length === 0 ? (
-            <div className="text-center py-8 text-slate-400 text-xs">No product sales yet</div>
+            <div className="text-center py-8 text-slate-400 text-sm">No product sales yet</div>
           ) : (
-            <div className="space-y-2.5">
+            <div className="space-y-3">
               {topProducts.map((item, i) => (
-                <div key={i} className="flex items-center justify-between border-b border-slate-100 pb-2 last:border-0 last:pb-0">
+                <div key={i} className="flex items-center justify-between border-b border-slate-100 pb-2.5 last:border-0 last:pb-0">
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className={`flex items-center justify-center w-5 h-5 text-[10px] font-bold rounded-md shrink-0 ${
+                    <span className={`flex items-center justify-center w-6 h-6 text-xs font-bold rounded-md shrink-0 ${
                       i === 0 ? 'bg-amber-100 text-amber-700'
                       : i === 1 ? 'bg-slate-100 text-slate-600'
                       : 'bg-orange-100 text-orange-700'
                     }`}>{i + 1}</span>
                     <div className="min-w-0">
-                      <p className="text-xs font-semibold text-slate-700 truncate">{item.name}</p>
-                      <p className="text-[10px] text-slate-400">{item.sold} sold</p>
+                      <p className="text-sm font-semibold text-slate-700 truncate">{item.name}</p>
+                      <p className="text-xs text-slate-400">{item.sold} sold</p>
                     </div>
                   </div>
-                  <span className="text-xs font-bold text-[#1a2a4a] shrink-0 ml-2">
+                  <span className="text-sm font-bold text-[#1a2a4a] shrink-0 ml-2">
                     KES {item.revenue.toLocaleString()}
                   </span>
                 </div>
@@ -590,23 +587,23 @@ const Dashboard = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-5">
 
         {/* Recent */}
-        <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200/80 shadow-sm p-3 sm:p-5">
+        <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200/80 shadow-sm p-4 sm:p-5">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-3">
             <div>
-              <h2 className="text-sm sm:text-base font-bold text-[#1a2a4a] flex items-center gap-2">
-                <Clock className="w-4 h-4 text-[#f47b20]" />
+              <h2 className="text-base sm:text-lg font-bold text-[#1a2a4a] flex items-center gap-2">
+                <Clock className="w-5 h-5 text-[#f47b20]" />
                 Recent Washes
               </h2>
-              <p className="text-[10px] sm:text-xs text-slate-400">Latest transactions</p>
+              <p className="text-xs sm:text-sm text-slate-400">Latest transactions</p>
             </div>
             <div className="relative w-full sm:w-56">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+              <Search className="w-4 h-4 text-slate-400 absolute left-2.5 top-2.5" />
               <input
                 type="text"
                 placeholder="Search..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#f47b20]"
+                className="w-full pl-9 pr-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#f47b20]"
               />
             </div>
           </div>
@@ -617,16 +614,16 @@ const Dashboard = () => {
         <div className="space-y-3 sm:space-y-5">
 
           {/* Top Services */}
-          <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-3 sm:p-5">
+          <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-4 sm:p-5">
             <div className="flex justify-between items-center mb-3">
               <div>
-                <h2 className="text-sm sm:text-base font-bold text-[#1a2a4a] flex items-center gap-2">
-                  <Award className="w-4 h-4 text-[#f47b20]" />
+                <h2 className="text-base sm:text-lg font-bold text-[#1a2a4a] flex items-center gap-2">
+                  <Award className="w-5 h-5 text-[#f47b20]" />
                   Top Services
                 </h2>
-                <p className="text-[10px] text-slate-400">By revenue</p>
+                <p className="text-xs text-slate-400">By revenue</p>
               </div>
-              <button onClick={() => navigate('/reports')} className="text-xs text-[#f47b20] font-semibold">
+              <button onClick={() => navigate('/reports')} className="text-sm text-[#f47b20] font-semibold">
                 Reports →
               </button>
             </div>
@@ -635,23 +632,23 @@ const Dashboard = () => {
                 <div className="h-6 w-6 border-2 border-[#f47b20] border-t-transparent rounded-full animate-spin"></div>
               </div>
             ) : topServices.length === 0 ? (
-              <div className="text-center py-8 text-slate-400 text-xs">No service records</div>
+              <div className="text-center py-8 text-slate-400 text-sm">No service records</div>
             ) : (
-              <div className="space-y-2.5">
+              <div className="space-y-3">
                 {topServices.map((item, i) => (
-                  <div key={i} className="flex items-center justify-between border-b border-slate-100 pb-2 last:border-0 last:pb-0">
+                  <div key={i} className="flex items-center justify-between border-b border-slate-100 pb-2.5 last:border-0 last:pb-0">
                     <div className="flex items-center gap-2 min-w-0">
-                      <span className={`flex items-center justify-center w-5 h-5 text-[10px] font-bold rounded-md shrink-0 ${
+                      <span className={`flex items-center justify-center w-6 h-6 text-xs font-bold rounded-md shrink-0 ${
                         i === 0 ? 'bg-amber-100 text-amber-700'
                         : i === 1 ? 'bg-slate-100 text-slate-600'
                         : 'bg-orange-100 text-orange-700'
                       }`}>{i + 1}</span>
                       <div className="min-w-0">
-                        <p className="text-xs font-semibold text-slate-700 truncate">{item.name}</p>
-                        <p className="text-[10px] text-slate-400">{item.sold} washes</p>
+                        <p className="text-sm font-semibold text-slate-700 truncate">{item.name}</p>
+                        <p className="text-xs text-slate-400">{item.sold} washes</p>
                       </div>
                     </div>
-                    <span className="text-xs font-bold text-[#1a2a4a] shrink-0 ml-2">
+                    <span className="text-sm font-bold text-[#1a2a4a] shrink-0 ml-2">
                       KES {item.revenue.toLocaleString()}
                     </span>
                   </div>
@@ -661,23 +658,23 @@ const Dashboard = () => {
           </div>
 
           {/* Quick Actions */}
-          <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-3 sm:p-5">
-            <h2 className="text-sm sm:text-base font-bold text-[#1a2a4a] mb-3 flex items-center gap-2">
-              <Zap className="w-4 h-4 text-[#f47b20]" />
+          <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-4 sm:p-5">
+            <h2 className="text-base sm:text-lg font-bold text-[#1a2a4a] mb-3 flex items-center gap-2">
+              <Zap className="w-5 h-5 text-[#f47b20]" />
               Quick Actions
             </h2>
-            <div className="grid grid-cols-2 gap-2">
-              <button onClick={() => navigate('/sales')} className="flex items-center justify-center gap-1.5 bg-[#f47b20] hover:bg-[#e06d1a] text-white p-2.5 rounded-lg text-xs font-semibold transition">
-                <Plus className="w-3.5 h-3.5" /> New Wash
+            <div className="grid grid-cols-2 gap-2.5">
+              <button onClick={() => navigate('/sales')} className="flex items-center justify-center gap-2 bg-[#f47b20] hover:bg-[#e06d1a] text-white p-3 rounded-lg text-sm font-semibold transition">
+                <Plus className="w-4 h-4" /> New Wash
               </button>
-              <button onClick={() => navigate('/items')} className="flex items-center justify-center gap-1.5 bg-[#1a2a4a] hover:bg-[#0f1a33] text-white p-2.5 rounded-lg text-xs font-semibold transition">
-                <Droplets className="w-3.5 h-3.5" /> Services
+              <button onClick={() => navigate('/items')} className="flex items-center justify-center gap-2 bg-[#1a2a4a] hover:bg-[#0f1a33] text-white p-3 rounded-lg text-sm font-semibold transition">
+                <Droplets className="w-4 h-4" /> Services
               </button>
-              <button onClick={() => navigate('/reports')} className="flex items-center justify-center gap-1.5 bg-slate-800 hover:bg-slate-900 text-white p-2.5 rounded-lg text-xs font-semibold transition">
-                <FileText className="w-3.5 h-3.5" /> Reports
+              <button onClick={() => navigate('/reports')} className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-900 text-white p-3 rounded-lg text-sm font-semibold transition">
+                <FileText className="w-4 h-4" /> Reports
               </button>
-              <button onClick={() => navigate('/stock')} className="flex items-center justify-center gap-1.5 bg-slate-800 hover:bg-slate-900 text-white p-2.5 rounded-lg text-xs font-semibold transition">
-                <Package className="w-3.5 h-3.5" /> Products
+              <button onClick={() => navigate('/stock')} className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-900 text-white p-3 rounded-lg text-sm font-semibold transition">
+                <Package className="w-4 h-4" /> Products
               </button>
             </div>
           </div>
@@ -685,7 +682,7 @@ const Dashboard = () => {
       </div>
 
       {/* Footer */}
-      <div className="flex flex-col sm:flex-row justify-between items-center pt-3 border-t border-slate-200 text-[10px] sm:text-xs text-slate-400 gap-1 text-center sm:text-left">
+      <div className="flex flex-col sm:flex-row justify-between items-center pt-3 border-t border-slate-200 text-xs sm:text-sm text-slate-400 gap-1 text-center sm:text-left">
         <span>Updated: <strong className="text-slate-600">{lastUpdated || '...'}</strong></span>
         <span className="flex items-center gap-2">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
