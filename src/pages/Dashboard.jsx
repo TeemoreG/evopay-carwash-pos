@@ -2,13 +2,14 @@ import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend, ComposedChart, Line
+  PieChart, Pie, Cell, Legend, ComposedChart, Line, BarChart, Bar,
 } from 'recharts';
 import {
   TrendingUp, Package, AlertTriangle, RefreshCw, CheckCircle2, XCircle,
   ArrowUpRight, Plus, FileText, Search, Activity, Clock, Calendar,
   Award, Zap, BarChart3, PieChart as PieChartIcon, Car, Droplets,
-  Timer, Gauge, DollarSign, Users
+  Timer, Gauge, Users, Banknote, CreditCard, Smartphone, Sparkles,
+  Trophy, Target, ArrowDownRight,
 } from 'lucide-react';
 
 import RecentSales from '../components/dashboard/RecentSales';
@@ -26,10 +27,13 @@ const Dashboard = () => {
     totalCustomers: 0, activeCashiers: 0,
     revenuePerCar: 0, peakHour: '—', peakHourCount: 0,
     carsPerHour: 0, openHours: 0,
+    topService: '—', weekRevenue: 0, monthRevenue: 0,
   });
   const [recentSales, setRecentSales] = useState([]);
   const [topServices, setTopServices] = useState([]);
+  const [topProducts, setTopProducts] = useState([]);
   const [chartData, setChartData] = useState([]);
+  const [hourlyData, setHourlyData] = useState([]);
   const [salesByPayment, setSalesByPayment] = useState([]);
   const [repeatCustomerRate, setRepeatCustomerRate] = useState(0);
   const [oldestPending, setOldestPending] = useState(null);
@@ -89,7 +93,6 @@ const Dashboard = () => {
     return Object.values(map);
   };
 
-  // POS metric: peak hour detection
   const calculatePeakHour = (salesData) => {
     const buckets = Array.from({ length: 24 }, (_, h) => ({ hour: h, count: 0 }));
     salesData.forEach(s => {
@@ -102,6 +105,20 @@ const Dashboard = () => {
     const h = top.hour;
     const label = `${h === 0 ? 12 : h > 12 ? h - 12 : h}${h < 12 ? 'am' : 'pm'}`;
     return { label, count: top.count };
+  };
+
+  const calculateHourlyData = (salesData) => {
+    const buckets = Array.from({ length: 24 }, (_, h) => ({
+      hour: h,
+      label: `${h === 0 ? 12 : h > 12 ? h - 12 : h}${h < 12 ? 'a' : 'p'}`,
+      count: 0,
+    }));
+    salesData.forEach(s => {
+      const d = new Date(getTs(s));
+      if (!isNaN(d.getTime())) buckets[d.getHours()].count += 1;
+    });
+    // Trim to business hours only (6am–10pm)
+    return buckets.filter(b => b.hour >= 6 && b.hour <= 22);
   };
 
   const calculateRepeatCustomerRate = (salesData) => {
@@ -166,6 +183,17 @@ const Dashboard = () => {
       const todayArr = sales.filter(s => getTs(s).slice(0, 10) === todayStr);
       const todayRevenue = todayArr.filter(s => s.status === 'Completed').reduce((s, x) => s + (x.total || 0), 0);
 
+      // Week + month totals
+      const now = new Date();
+      const weekAgo = new Date(now); weekAgo.setDate(now.getDate() - 7);
+      const monthAgo = new Date(now); monthAgo.setDate(now.getDate() - 30);
+      const weekRevenue = completed
+        .filter(s => new Date(getTs(s)) >= weekAgo)
+        .reduce((sum, s) => sum + (s.total || 0), 0);
+      const monthRevenue = completed
+        .filter(s => new Date(getTs(s)) >= monthAgo)
+        .reduce((sum, s) => sum + (s.total || 0), 0);
+
       const productStock = stock.filter(s => s.item_type === 'product' || s.item_ty_cd === '1');
       const stockValue = productStock.reduce((s, x) => s + (x.price || 0) * (x.stock || 0), 0);
 
@@ -177,7 +205,6 @@ const Dashboard = () => {
       const uniqueCustomers = new Set(sales.map(s => s.customer).filter(Boolean));
       const uniqueCashiers = new Set(sales.map(s => s.cashier).filter(Boolean));
 
-      const now = new Date();
       const l7 = new Date(now); l7.setDate(now.getDate() - 7);
       const p7 = new Date(l7); p7.setDate(l7.getDate() - 7);
       const sum = (arr) => arr.reduce((s, x) => s + (x.total || 0), 0);
@@ -188,8 +215,20 @@ const Dashboard = () => {
       const peak = calculatePeakHour(sales);
       const todayCompleted = todayArr.filter(s => s.status === 'Completed').length;
       const currentHour = new Date().getHours();
-      const openHours = Math.max(currentHour - 7, 1); // assume 7am open
+      const openHours = Math.max(currentHour - 7, 1);
       const carsPerHour = todayCompleted > 0 ? (todayCompleted / openHours).toFixed(1) : 0;
+
+      const topSvcList = calculateTopServices(sales);
+      const topSvc = topSvcList[0]?.name || '—';
+
+      // Separate top services (item_type=service) vs top products
+      const allItemSales = calculateTopServices(sales);
+      const serviceItems = allItemSales.filter(x => 
+        services.some(svc => (svc.item_name || svc.itemNm) === x.name)
+      );
+      const productItems = allItemSales.filter(x =>
+        products.some(prd => (prd.item_name || prd.itemNm) === x.name)
+      );
 
       setStats({
         totalServices: services.length, totalProducts: products.length,
@@ -199,12 +238,16 @@ const Dashboard = () => {
         revenuePerCar: Math.round(revenuePerCar),
         peakHour: peak.label, peakHourCount: peak.count,
         carsPerHour, openHours,
+        topService: topSvc,
+        weekRevenue, monthRevenue,
       });
 
       const sorted = [...sales].sort((a, b) => new Date(getTs(b)) - new Date(getTs(a)));
       setRecentSales(sorted.slice(0, 10));
-      setTopServices(calculateTopServices(sales));
+      setTopServices(serviceItems.slice(0, 5));
+      setTopProducts(productItems.slice(0, 5));
       setChartData(processChartData(sales, timeRange));
+      setHourlyData(calculateHourlyData(sales));
       setSalesByPayment(calculateSalesByPayment(sales));
       setRepeatCustomerRate(calculateRepeatCustomerRate(sales));
       setOldestPending(calculateOldestPending(sales));
@@ -244,127 +287,136 @@ const Dashboard = () => {
     );
   };
 
+  const HourTooltip = ({ active, payload, label }) => {
+    if (!active || !payload?.length) return null;
+    return (
+      <div className="bg-white p-2 rounded-lg shadow-lg border border-slate-200">
+        <p className="text-[10px] font-semibold text-slate-500">{label}</p>
+        <p className="text-xs font-bold text-[#f47b20]">{payload[0].value} washes</p>
+      </div>
+    );
+  };
+
   return (
-    <div className="min-h-screen bg-[#f8fafc] text-slate-800 p-3 sm:p-4 lg:p-6 space-y-4 sm:space-y-5">
+    <div className="min-h-screen bg-[#f8fafc] text-slate-800 p-3 sm:p-4 lg:p-6 space-y-3 sm:space-y-5">
 
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 sm:gap-4 bg-white p-4 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 bg-white p-3 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-[#1a2a4a]">Car Wash POS Dashboard</h1>
-          <p className="text-slate-500 text-xs sm:text-sm mt-0.5">Live overview of your wash business</p>
+          <h1 className="text-lg sm:text-2xl font-bold text-[#1a2a4a]">Car Wash POS</h1>
+          <p className="text-slate-500 text-[11px] sm:text-sm mt-0.5">Live overview of your wash business</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full md:w-auto">
-          <div className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium border ${
+        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+          <div className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] sm:text-sm font-medium border ${
             stats.growthRate > 0 ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
             : stats.growthRate < 0 ? 'bg-rose-50 text-rose-700 border-rose-200'
             : 'bg-slate-50 text-slate-600 border-slate-200'
           }`}>
-            <TrendingUp className={`w-4 h-4 ${stats.growthRate < 0 ? 'rotate-180' : ''}`} />
+            {stats.growthRate < 0 ? <ArrowDownRight className="w-3.5 h-3.5" /> : <TrendingUp className="w-3.5 h-3.5" />}
             <span>{stats.growthRate > 0 ? '+' : ''}{stats.growthRate.toFixed(1)}%</span>
-            <span className="text-xs text-slate-500 hidden sm:inline">vs last week</span>
           </div>
           <button
             onClick={() => { fetchDashboardData(); checkVSCU(); }}
             disabled={refreshing}
-            className="flex items-center gap-2 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg border border-slate-200/60 disabled:opacity-50"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] sm:text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg border border-slate-200/60 disabled:opacity-50"
           >
-            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-            <span className="hidden sm:inline">Refresh</span>
+            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
           </button>
-          <div className="text-xs sm:text-sm text-slate-600 bg-slate-50 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg border border-slate-200 font-medium flex items-center gap-1.5">
-            <Calendar className="w-4 h-4" />
-            <span className="truncate max-w-[140px] sm:max-w-none">{todayFormatted}</span>
+          <div className="text-[11px] sm:text-sm text-slate-600 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-200 font-medium flex items-center gap-1.5">
+            <Calendar className="w-3.5 h-3.5" />
+            <span className="truncate max-w-[120px] sm:max-w-none">{todayFormatted}</span>
           </div>
         </div>
       </div>
 
-      {/* Hero Stats - POS-focused */}
-      <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm hover:shadow-md transition">
-          <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-wider text-slate-400">Today's Revenue</p>
-          <h3 className="text-xl sm:text-2xl font-extrabold text-[#1a2a4a] mt-1 break-words">
+      {/* Hero Stats — 2x2 on mobile, 4-col on desktop */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+        {/* Today's Revenue */}
+        <div className="bg-white p-3 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
+          <div className="flex items-start justify-between gap-1">
+            <p className="text-[9px] sm:text-xs font-semibold uppercase tracking-wider text-slate-400">Today</p>
+            <div className="p-1.5 bg-orange-50 rounded-lg">
+              <Banknote className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#f47b20]" />
+            </div>
+          </div>
+          <h3 className="text-base sm:text-2xl font-extrabold text-[#1a2a4a] mt-1.5 tabular-nums break-words leading-tight">
             KES {stats.todayRevenue.toLocaleString()}
           </h3>
-          <div className="mt-3 text-xs text-slate-500">
-            Total: <span className="font-semibold text-slate-700">KES {stats.totalRevenue.toLocaleString()}</span>
-          </div>
+          <p className="text-[10px] sm:text-xs text-slate-500 mt-1">
+            Week: <span className="font-semibold text-slate-700">KES {stats.weekRevenue.toLocaleString()}</span>
+          </p>
         </div>
 
-        <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm hover:shadow-md transition">
-          <div className="flex justify-between items-start">
-            <div className="min-w-0">
-              <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-wider text-slate-400">Today's Washes</p>
-              <h3 className="text-xl sm:text-2xl font-extrabold text-[#1a2a4a] mt-1">{stats.todaySales}</h3>
-            </div>
-            <div className="p-2 sm:p-2.5 bg-linear-to-br from-orange-50 to-orange-100/50 text-[#f47b20] rounded-lg shrink-0">
-              <Car className="w-5 h-5" />
+        {/* Today's Washes */}
+        <div className="bg-white p-3 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
+          <div className="flex items-start justify-between gap-1">
+            <p className="text-[9px] sm:text-xs font-semibold uppercase tracking-wider text-slate-400">Washes</p>
+            <div className="p-1.5 bg-orange-50 rounded-lg">
+              <Car className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#f47b20]" />
             </div>
           </div>
-          <div className="mt-3 flex items-center gap-1 text-xs text-slate-500">
-            <Gauge className="w-3 h-3" />
-            <span>{stats.carsPerHour} cars/hr</span>
-          </div>
+          <h3 className="text-base sm:text-2xl font-extrabold text-[#1a2a4a] mt-1.5 tabular-nums">
+            {stats.todaySales}
+          </h3>
+          <p className="text-[10px] sm:text-xs text-slate-500 mt-1">
+            {stats.carsPerHour} <span className="text-slate-400">cars/hr</span>
+          </p>
         </div>
 
-        <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm hover:shadow-md transition">
-          <div className="flex justify-between items-start">
-            <div className="min-w-0">
-              <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-wider text-slate-400">Revenue / Car</p>
-              <h3 className="text-xl sm:text-2xl font-extrabold text-[#1a2a4a] mt-1 break-words">
-                KES {stats.revenuePerCar.toLocaleString()}
-              </h3>
-            </div>
-            <div className="p-2 sm:p-2.5 bg-linear-to-br from-emerald-50 to-emerald-100/50 text-emerald-600 rounded-lg shrink-0">
-              <TrendingUp className="w-5 h-5" />
+        {/* Avg Ticket */}
+        <div className="bg-white p-3 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
+          <div className="flex items-start justify-between gap-1">
+            <p className="text-[9px] sm:text-xs font-semibold uppercase tracking-wider text-slate-400">Avg Ticket</p>
+            <div className="p-1.5 bg-emerald-50 rounded-lg">
+              <Target className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600" />
             </div>
           </div>
-          <div className="mt-3 flex items-center gap-1 text-xs text-slate-500">
-            <Timer className="w-3 h-3" />
-            <span>Peak: {stats.peakHour}</span>
-          </div>
+          <h3 className="text-base sm:text-2xl font-extrabold text-[#1a2a4a] mt-1.5 tabular-nums break-words leading-tight">
+            KES {Math.round(stats.avgOrderValue).toLocaleString()}
+          </h3>
+          <p className="text-[10px] sm:text-xs text-slate-500 mt-1 truncate">
+            Peak: {stats.peakHour}
+          </p>
         </div>
 
-        <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm hover:shadow-md transition">
-          <div className="flex justify-between items-start">
-            <div className="min-w-0">
-              <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-wider text-slate-400">Pending Sync</p>
-              <h3 className={`text-xl sm:text-2xl font-extrabold mt-1 ${stats.pendingSales > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
-                {stats.pendingSales}
-              </h3>
-            </div>
-            <div className={`p-2 sm:p-2.5 rounded-lg shrink-0 ${stats.pendingSales > 0 ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'}`}>
-              <AlertTriangle className="w-5 h-5" />
+        {/* Pending */}
+        <div className="bg-white p-3 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
+          <div className="flex items-start justify-between gap-1">
+            <p className="text-[9px] sm:text-xs font-semibold uppercase tracking-wider text-slate-400">Pending</p>
+            <div className={`p-1.5 rounded-lg ${stats.pendingSales > 0 ? 'bg-amber-50' : 'bg-emerald-50'}`}>
+              <AlertTriangle className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${stats.pendingSales > 0 ? 'text-amber-600' : 'text-emerald-600'}`} />
             </div>
           </div>
-          <div className="mt-3 flex items-center justify-between text-xs">
-            <span className="text-slate-500 truncate">{oldestPending ? `Oldest: ${oldestPending}` : 'All synced'}</span>
-            <button onClick={() => navigate('/sales')} className="text-[#f47b20] font-semibold hover:underline flex items-center gap-0.5 shrink-0 ml-2">
-              Resolve <ArrowUpRight className="w-3 h-3" />
-            </button>
-          </div>
+          <h3 className={`text-base sm:text-2xl font-extrabold mt-1.5 tabular-nums ${
+            stats.pendingSales > 0 ? 'text-amber-600' : 'text-emerald-600'
+          }`}>
+            {stats.pendingSales}
+          </h3>
+          <button onClick={() => navigate('/sales')} className="text-[10px] sm:text-xs text-[#f47b20] font-semibold mt-1 flex items-center gap-0.5">
+            Resolve <ArrowUpRight className="w-3 h-3" />
+          </button>
         </div>
       </div>
 
-      {/* Main Analytics */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5">
+      {/* Revenue Trend + Hourly chart */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-5">
 
-        {/* Revenue Trend */}
-        <div className="lg:col-span-2 bg-white p-4 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
-          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
+        <div className="lg:col-span-2 bg-white p-3 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-3">
             <div>
               <h2 className="text-sm sm:text-base font-bold text-[#1a2a4a] flex items-center gap-2">
                 <BarChart3 className="w-4 h-4 text-[#f47b20]" />
                 Revenue Trend
               </h2>
-              <p className="text-xs text-slate-400">Daily revenue and wash count</p>
+              <p className="text-[10px] sm:text-xs text-slate-400">Daily revenue and wash count</p>
             </div>
             <div className="flex bg-slate-100 rounded-lg p-0.5 self-start sm:self-auto">
               {['7d', '30d', '90d'].map(r => (
                 <button
                   key={r}
                   onClick={() => { setTimeRange(r); setTimeout(fetchDashboardData, 0); }}
-                  className={`px-2.5 sm:px-3 py-1 text-xs font-medium rounded-md transition ${
-                    timeRange === r ? 'bg-white text-[#1a2a4a] shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                  className={`px-2.5 py-1 text-[10px] sm:text-xs font-medium rounded-md transition ${
+                    timeRange === r ? 'bg-white text-[#1a2a4a] shadow-sm' : 'text-slate-500'
                   }`}
                 >
                   {r.toUpperCase()}
@@ -373,7 +425,7 @@ const Dashboard = () => {
             </div>
           </div>
 
-          <div className="h-56 sm:h-64 w-full">
+          <div className="h-48 sm:h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={chartData} margin={{ top: 10, right: 5, left: -15, bottom: 0 }}>
                 <defs>
@@ -391,133 +443,190 @@ const Dashboard = () => {
               </ComposedChart>
             </ResponsiveContainer>
           </div>
-
-          <div className="flex items-center gap-4 mt-3 pt-2 border-t border-slate-100">
-            <div className="flex items-center gap-1.5">
-              <span className="w-3 h-0.5 bg-[#f47b20]"></span>
-              <span className="text-[10px] text-slate-500">Revenue</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-3 h-0.5 bg-emerald-500"></span>
-              <span className="text-[10px] text-slate-500">Washes</span>
-            </div>
-          </div>
         </div>
 
-        {/* Right column */}
-        <div className="space-y-4 sm:space-y-5">
-
-          {/* Payment Methods */}
-          <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
-            <h2 className="text-sm sm:text-base font-bold text-[#1a2a4a] flex items-center gap-2 mb-3">
-              <PieChartIcon className="w-4 h-4 text-[#f47b20]" />
-              Payment Methods
-            </h2>
-            {salesByPayment.length > 0 ? (
-              <div className="h-44">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={salesByPayment} cx="50%" cy="50%" innerRadius={45} outerRadius={65} paddingAngle={2} dataKey="value">
-                      {salesByPayment.map((_, i) => (
-                        <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Legend iconType="circle" iconSize={6} verticalAlign="bottom"
-                      formatter={(v) => <span className="text-[10px] text-slate-600">{v}</span>} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            ) : (
-              <div className="text-center py-6 text-slate-400 text-xs">No payment data yet</div>
-            )}
+        {/* Hourly Activity */}
+        <div className="bg-white p-3 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
+          <h2 className="text-sm sm:text-base font-bold text-[#1a2a4a] flex items-center gap-2 mb-1">
+            <Clock className="w-4 h-4 text-[#f47b20]" />
+            Hourly Activity
+          </h2>
+          <p className="text-[10px] sm:text-xs text-slate-400 mb-3">Washes by hour of day</p>
+          <div className="h-40 sm:h-52">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={hourlyData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+                <XAxis dataKey="label" stroke="#94a3b8" fontSize={9} tickLine={false} axisLine={false} />
+                <YAxis stroke="#94a3b8" fontSize={9} tickLine={false} axisLine={false} allowDecimals={false} />
+                <Tooltip content={<HourTooltip />} cursor={{ fill: '#f47b20', opacity: 0.1 }} />
+                <Bar dataKey="count" fill="#1a2a4a" radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
-
-          {/* Business Health */}
-          <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
-            <h2 className="text-sm sm:text-base font-bold text-[#1a2a4a] flex items-center gap-2 mb-4">
-              <Activity className="w-4 h-4 text-[#f47b20]" />
-              Business Health
-            </h2>
-
-            <div className="p-3 bg-slate-50 rounded-lg border border-slate-100 mb-3">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-xs font-semibold text-slate-600">Daily Target</span>
-                <span className="text-sm font-bold text-[#1a2a4a]">
-                  {Math.min(Math.round((stats.todayRevenue / 10000) * 100), 100)}%
-                </span>
-              </div>
-              <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-                <div className="h-full rounded-full bg-linear-to-r from-[#f47b20] to-[#1a2a4a] transition-all duration-700"
-                  style={{ width: `${Math.min((stats.todayRevenue / 10000) * 100, 100)}%` }} />
-              </div>
-              <p className="text-[10px] text-slate-400 mt-2">
-                KES {stats.todayRevenue.toLocaleString()} of KES 10,000
-              </p>
-            </div>
-
-            <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-xs font-semibold text-slate-600">VSCU</span>
-                <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${
-                  vscuStatus.connected ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
-                }`}>
-                  {vscuStatus.checking ? <RefreshCw className="w-3 h-3 animate-spin" />
-                    : vscuStatus.connected ? <CheckCircle2 className="w-3.5 h-3.5" />
-                    : <XCircle className="w-3.5 h-3.5" />}
-                  {vscuStatus.checking ? 'Checking' : vscuStatus.connected ? 'Online' : 'Offline'}
-                </span>
-              </div>
-              <div className="grid grid-cols-3 gap-2 text-xs">
-                <div><span className="text-slate-400">Customers:</span> <span className="font-semibold text-slate-700">{stats.totalCustomers}</span></div>
-                <div><span className="text-slate-400">Cashiers:</span> <span className="font-semibold text-slate-700">{stats.activeCashiers}</span></div>
-                <div><span className="text-slate-400">Repeat:</span> <span className="font-semibold text-slate-700">{repeatCustomerRate}%</span></div>
-              </div>
-            </div>
-          </div>
-
         </div>
       </div>
 
-      {/* Recent + Top Services */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5">
+      {/* Analytics grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-5">
+
+        {/* Payment Methods */}
+        <div className="bg-white p-3 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
+          <h2 className="text-sm sm:text-base font-bold text-[#1a2a4a] flex items-center gap-2 mb-3">
+            <PieChartIcon className="w-4 h-4 text-[#f47b20]" />
+            Payment Methods
+          </h2>
+          {salesByPayment.length > 0 ? (
+            <div className="h-44">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={salesByPayment} cx="50%" cy="50%" innerRadius={40} outerRadius={60} paddingAngle={2} dataKey="value">
+                    {salesByPayment.map((_, i) => (
+                      <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Legend iconType="circle" iconSize={6} verticalAlign="bottom"
+                    formatter={(v) => <span className="text-[10px] text-slate-600">{v}</span>} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-slate-400 text-xs">No data yet</div>
+          )}
+        </div>
+
+        {/* Business Health */}
+        <div className="bg-white p-3 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
+          <h2 className="text-sm sm:text-base font-bold text-[#1a2a4a] flex items-center gap-2 mb-3">
+            <Activity className="w-4 h-4 text-[#f47b20]" />
+            Business Health
+          </h2>
+
+          <div className="p-3 bg-slate-50 rounded-lg border border-slate-100 mb-3">
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-xs font-semibold text-slate-600">Daily Target</span>
+              <span className="text-sm font-bold text-[#1a2a4a]">
+                {Math.min(Math.round((stats.todayRevenue / 10000) * 100), 100)}%
+              </span>
+            </div>
+            <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+              <div className="h-full rounded-full bg-linear-to-r from-[#f47b20] to-[#1a2a4a] transition-all duration-700"
+                style={{ width: `${Math.min((stats.todayRevenue / 10000) * 100, 100)}%` }} />
+            </div>
+            <p className="text-[10px] text-slate-400 mt-2">
+              KES {stats.todayRevenue.toLocaleString()} / KES 10,000
+            </p>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2 text-xs">
+            <div className="text-center p-2 bg-slate-50 rounded-lg">
+              <p className="text-[9px] text-slate-400 uppercase">Customers</p>
+              <p className="font-bold text-slate-700">{stats.totalCustomers}</p>
+            </div>
+            <div className="text-center p-2 bg-slate-50 rounded-lg">
+              <p className="text-[9px] text-slate-400 uppercase">Cashiers</p>
+              <p className="font-bold text-slate-700">{stats.activeCashiers}</p>
+            </div>
+            <div className="text-center p-2 bg-slate-50 rounded-lg">
+              <p className="text-[9px] text-slate-400 uppercase">Repeat</p>
+              <p className="font-bold text-slate-700">{repeatCustomerRate}%</p>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between mt-3 p-2 bg-slate-50 rounded-lg">
+            <span className="text-xs font-semibold text-slate-600">VSCU</span>
+            <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${
+              vscuStatus.connected ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+            }`}>
+              {vscuStatus.checking ? <RefreshCw className="w-3 h-3 animate-spin" />
+                : vscuStatus.connected ? <CheckCircle2 className="w-3.5 h-3.5" />
+                : <XCircle className="w-3.5 h-3.5" />}
+              {vscuStatus.checking ? 'Checking' : vscuStatus.connected ? 'Online' : 'Offline'}
+            </span>
+          </div>
+        </div>
+
+        {/* Top Products */}
+        <div className="bg-white p-3 sm:p-5 rounded-xl border border-slate-200/80 shadow-sm">
+          <div className="flex justify-between items-center mb-3">
+            <h2 className="text-sm sm:text-base font-bold text-[#1a2a4a] flex items-center gap-2">
+              <Trophy className="w-4 h-4 text-[#f47b20]" />
+              Top Products
+            </h2>
+            <button onClick={() => navigate('/stock')} className="text-xs text-[#f47b20] font-semibold">
+              All →
+            </button>
+          </div>
+          {loading ? (
+            <div className="flex justify-center py-8">
+              <div className="h-6 w-6 border-2 border-[#f47b20] border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          ) : topProducts.length === 0 ? (
+            <div className="text-center py-8 text-slate-400 text-xs">No product sales yet</div>
+          ) : (
+            <div className="space-y-2.5">
+              {topProducts.map((item, i) => (
+                <div key={i} className="flex items-center justify-between border-b border-slate-100 pb-2 last:border-0 last:pb-0">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className={`flex items-center justify-center w-5 h-5 text-[10px] font-bold rounded-md shrink-0 ${
+                      i === 0 ? 'bg-amber-100 text-amber-700'
+                      : i === 1 ? 'bg-slate-100 text-slate-600'
+                      : 'bg-orange-100 text-orange-700'
+                    }`}>{i + 1}</span>
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-slate-700 truncate">{item.name}</p>
+                      <p className="text-[10px] text-slate-400">{item.sold} sold</p>
+                    </div>
+                  </div>
+                  <span className="text-xs font-bold text-[#1a2a4a] shrink-0 ml-2">
+                    KES {item.revenue.toLocaleString()}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Recent + Top Services + Quick Actions */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-5">
 
         {/* Recent */}
-        <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200/80 shadow-sm p-4 sm:p-5">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-5">
+        <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200/80 shadow-sm p-3 sm:p-5">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-3">
             <div>
               <h2 className="text-sm sm:text-base font-bold text-[#1a2a4a] flex items-center gap-2">
                 <Clock className="w-4 h-4 text-[#f47b20]" />
                 Recent Washes
               </h2>
-              <p className="text-xs text-slate-400">Latest transactions</p>
+              <p className="text-[10px] sm:text-xs text-slate-400">Latest transactions</p>
             </div>
-            <div className="relative w-full sm:w-64">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+            <div className="relative w-full sm:w-56">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
               <input
                 type="text"
-                placeholder="Search invoice or plate..."
+                placeholder="Search..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#f47b20]"
+                className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#f47b20]"
               />
             </div>
           </div>
           <RecentSales sales={filteredSales} loading={loading} onViewAll={() => navigate('/sales')} />
         </div>
 
-        {/* Right: Top Services + Quick Actions */}
-        <div className="space-y-4 sm:space-y-5">
+        {/* Right column */}
+        <div className="space-y-3 sm:space-y-5">
 
-          <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-4 sm:p-5">
-            <div className="flex justify-between items-center mb-4">
+          {/* Top Services */}
+          <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-3 sm:p-5">
+            <div className="flex justify-between items-center mb-3">
               <div>
                 <h2 className="text-sm sm:text-base font-bold text-[#1a2a4a] flex items-center gap-2">
                   <Award className="w-4 h-4 text-[#f47b20]" />
                   Top Services
                 </h2>
-                <p className="text-xs text-slate-400">By revenue</p>
+                <p className="text-[10px] text-slate-400">By revenue</p>
               </div>
-              <button onClick={() => navigate('/reports')} className="text-xs text-[#f47b20] hover:underline font-semibold">
+              <button onClick={() => navigate('/reports')} className="text-xs text-[#f47b20] font-semibold">
                 Reports →
               </button>
             </div>
@@ -526,17 +635,16 @@ const Dashboard = () => {
                 <div className="h-6 w-6 border-2 border-[#f47b20] border-t-transparent rounded-full animate-spin"></div>
               </div>
             ) : topServices.length === 0 ? (
-              <div className="text-center py-8 text-slate-400 text-xs">No service records yet</div>
+              <div className="text-center py-8 text-slate-400 text-xs">No service records</div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-2.5">
                 {topServices.map((item, i) => (
-                  <div key={i} className="flex items-center justify-between border-b border-slate-100 pb-2.5 last:border-0 last:pb-0">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <span className={`flex items-center justify-center w-6 h-6 text-xs font-bold rounded-md shrink-0 ${
+                  <div key={i} className="flex items-center justify-between border-b border-slate-100 pb-2 last:border-0 last:pb-0">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className={`flex items-center justify-center w-5 h-5 text-[10px] font-bold rounded-md shrink-0 ${
                         i === 0 ? 'bg-amber-100 text-amber-700'
                         : i === 1 ? 'bg-slate-100 text-slate-600'
-                        : i === 2 ? 'bg-orange-100 text-orange-700'
-                        : 'bg-slate-100 text-slate-600'
+                        : 'bg-orange-100 text-orange-700'
                       }`}>{i + 1}</span>
                       <div className="min-w-0">
                         <p className="text-xs font-semibold text-slate-700 truncate">{item.name}</p>
@@ -552,12 +660,13 @@ const Dashboard = () => {
             )}
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-4 sm:p-5">
+          {/* Quick Actions */}
+          <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-3 sm:p-5">
             <h2 className="text-sm sm:text-base font-bold text-[#1a2a4a] mb-3 flex items-center gap-2">
               <Zap className="w-4 h-4 text-[#f47b20]" />
               Quick Actions
             </h2>
-            <div className="grid grid-cols-2 gap-2.5">
+            <div className="grid grid-cols-2 gap-2">
               <button onClick={() => navigate('/sales')} className="flex items-center justify-center gap-1.5 bg-[#f47b20] hover:bg-[#e06d1a] text-white p-2.5 rounded-lg text-xs font-semibold transition">
                 <Plus className="w-3.5 h-3.5" /> New Wash
               </button>
@@ -576,11 +685,11 @@ const Dashboard = () => {
       </div>
 
       {/* Footer */}
-      <div className="flex flex-col sm:flex-row justify-between items-center pt-4 border-t border-slate-200 text-xs text-slate-400 gap-2 text-center sm:text-left">
-        <span>Last Updated: <strong className="text-slate-600">{lastUpdated || 'Initializing...'}</strong></span>
+      <div className="flex flex-col sm:flex-row justify-between items-center pt-3 border-t border-slate-200 text-[10px] sm:text-xs text-slate-400 gap-1 text-center sm:text-left">
+        <span>Updated: <strong className="text-slate-600">{lastUpdated || '...'}</strong></span>
         <span className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-          Evopay Car Wash POS v1.0.0 | KRA eTIMS Compliant
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+          Evopay Car Wash POS v1.0.0 | KRA eTIMS
         </span>
       </div>
     </div>
