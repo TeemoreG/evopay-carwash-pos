@@ -19,6 +19,7 @@ const customersRoutes = require('./routes/customers');
 const suppliersRoutes = require('./routes/suppliers');
 const paymentsRoutes = require('./routes/payments');
 const printRoutes = require('./routes/print');
+const receiptsRoutes = require('./routes/receipts');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -115,6 +116,7 @@ app.use('/api/customers', customersRoutes);
 app.use('/api/suppliers', suppliersRoutes);
 app.use('/api/pay', paymentsRoutes);
 app.use('/api/print', printRoutes);
+app.use('/api/receipts', receiptsRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({

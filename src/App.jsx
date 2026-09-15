@@ -19,6 +19,7 @@ import Cashiers from './pages/Cashiers.jsx';
 import Notices from './pages/Notices.jsx';
 import Customers from './pages/Customers.jsx';
 import PayPage from './pages/PayPage.jsx';
+import ReceiptView from './pages/ReceiptView.jsx';
 import AdminRoute from './components/AdminRoute.jsx';
 
 const ProtectedRoute = ({ children }) => {
@@ -56,6 +57,7 @@ function App() {
         {/* Public */}
         <Route path="/login" element={<Login />} />
         <Route path="/pay/:invoice" element={<PayPage />} />
+        <Route path="/receipt/:invoice" element={<ReceiptView />} />
 
         {/* Protected */}
         <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>

@@ -301,6 +301,14 @@ export const getSaleByInvoice = (invoiceNo) => {
   return axiosInstance.get(`/api/sales/by-invoice/${invoiceNo}`);
 };
 
+export const getReceiptByInvoice = (invoiceNo) => {
+  return axiosInstance.get(`/api/receipts/${invoiceNo}`);
+};
+
+export const sendReceiptSms = (invoiceNo, phone) => {
+  return axiosInstance.post(`/api/receipts/${invoiceNo}/send-sms`, { phone });
+};
+
 // ============================================
 // BRANCHES (Local)
 // ============================================
