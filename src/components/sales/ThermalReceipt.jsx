@@ -93,7 +93,7 @@ const buildPlainTextReceipt = (sale) => {
   const kraPin = import.meta.env.VITE_VSCU_TIN || '';
 
   let txt = '';
-  txt += '        EVOPAY CAR WASH\n';
+  txt += '        CAR WASH\n';
   txt += '      eTIMS Compliant Receipt\n';
   if (kraPin) txt += `         PIN: ${kraPin}\n`;
   txt += `Invoice: ${sale.invoice_no || 'N/A'}\n`;
@@ -219,7 +219,7 @@ export const generateThermalReceipt = async (saleData, logoRef = null, paperWidt
 
     // ---- Brand ----
     doc.setFont('courier', 'bold').setFontSize(brandFont).setTextColor(...blue);
-    doc.text('EVOPAY CAR WASH', pageWidth / 2, y, { align: 'center' });
+    doc.text('CAR WASH', pageWidth / 2, y, { align: 'center' });
     y += 5.5;
 
     doc.setFont('courier', 'bold').setFontSize(bodyFont).setTextColor(...black);
