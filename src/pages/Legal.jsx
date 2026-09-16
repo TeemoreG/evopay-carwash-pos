@@ -1,5 +1,5 @@
 import kraLogo from '../assets/kra-logo.svg';
-import evopayLogo from '../assets/evopay-logo.png';
+import evopayLogo from '../assets/evopay-logo.jpg';
 
 const Legal = () => {
   return (
