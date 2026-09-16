@@ -391,8 +391,12 @@ router.post('/mpesa-callback', async (req, res) => {
         [receipt, phone, session.id]
       );
 
-      try {
-        const result = await materializeSale({ ...session, transaction_id: receipt });
+            try {
+        const result = await materializeSale({
+          ...session,
+          transaction_id: receipt,
+          customer_phone: phone || session.customer_phone,
+        });
         console.log(`[CALLBACK] materialized saleId=${result.saleId} synced=${result.synced} queued=${result.queued}`);
       } catch (e) {
         console.error(`[CALLBACK] materializeSale failed:`, e.message);
@@ -448,8 +452,12 @@ router.post('/c2b-callback', async (req, res) => {
       [TransID, MSISDN, session.id]
     );
 
-    try {
-      const result = await materializeSale({ ...session, transaction_id: TransID });
+        try {
+      const result = await materializeSale({
+        ...session,
+        transaction_id: TransID,
+        customer_phone: MSISDN || session.customer_phone,
+      });
       console.log(`[C2B] materialized saleId=${result.saleId} synced=${result.synced}`);
     } catch (e) {
       console.error(`[C2B] materializeSale failed:`, e.message);
