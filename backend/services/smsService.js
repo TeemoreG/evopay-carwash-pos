@@ -95,7 +95,7 @@ async function sendSms({ to, message, refId }) {
  */
 function buildReceiptMessage({ invoiceNo, amount, receiptUrl, businessName = 'Evopay Car Wash' }) {
   const amt = Number(amount || 0).toLocaleString();
-  return `${businessName}: Receipt ${invoiceNo} for KES ${amt}. View: ${receiptUrl}`;
+  const cleanUrl = String(receiptUrl || '').trim().replace(/\s+/g, '');
+  return `${businessName}: Receipt ${invoiceNo} for KES ${amt}. View: ${cleanUrl}`;
 }
-
 module.exports = { sendSms, normalizePhone, buildReceiptMessage };
