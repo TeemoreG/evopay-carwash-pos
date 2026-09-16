@@ -1,31 +1,13 @@
-// backend/services/smsService.js
-// Sends SMS via Tiara Connect gateway.
-// Fails silently — SMS failures must never block a sale.
-
 const axios = require('axios');
 
 const TIARA_API_KEY = process.env.TIARA_API_KEY;
-const TIARA_SENDER_ID = process.env.TIARA_SENDER_ID || 'TIARA';
+const TIARA_SENDER_ID = process.env.TIARA_SENDER_ID || 'EVOPAY';
 const TIARA_ENDPOINT = process.env.TIARA_ENDPOINT || 'https://api2.tiaraconnect.io/api/messaging/sendsms';
 
 if (!TIARA_API_KEY) {
   console.warn('[SMS] WARN: TIARA_API_KEY not set — SMS sending disabled');
 }
 
-/**
- * Normalize a Kenyan phone number to 2547XXXXXXXX / 2541XXXXXXXX.
- *
- * Accepted inputs:
- *   07XXXXXXXX   (10 digits starting 07)
- *   01XXXXXXXX   (10 digits starting 01)
- *   7XXXXXXXX    (9 digits starting 7)
- *   1XXXXXXXX    (9 digits starting 1)
- *   2547XXXXXXXX (12 digits starting 2547)
- *   2541XXXXXXXX (12 digits starting 2541)
- *   +2547XXXXXXXX / +2541XXXXXXXX (+ prefix, stripped)
- *
- * Returns the normalized 12-digit string, or null if invalid.
- */
 function normalizePhone(phone) {
   if (phone === null || phone === undefined) return null;
 
