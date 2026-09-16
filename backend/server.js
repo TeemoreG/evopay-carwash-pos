@@ -35,8 +35,6 @@ app.use(cors({
 }));
 
 // ==================== REQUEST / RESPONSE LOGGER ====================
-// Quiet paths: health checks, root, VSCU status (frontend already shows it),
-// payment status polling (too frequent, useful info already logged at source).
 const QUIET_PATHS = [
   '/api/health',
   '/',
@@ -117,6 +115,26 @@ app.use('/api/suppliers', suppliersRoutes);
 app.use('/api/pay', paymentsRoutes);
 app.use('/api/print', printRoutes);
 app.use('/api/receipts', receiptsRoutes);
+
+// ==================== SAFARICOM CALLBACK ALIASES ====================
+// Safaricom's C2B registration is configured WITHOUT the /api/pay prefix.
+// These aliases forward the exact paths Safaricom calls into the real handlers.
+// No changes to payments.js needed — just transparent forwarding.
+app.post('/mpesa-callback', (req, res, next) => {
+  console.log('[ALIAS] POST /mpesa-callback -> /api/pay/mpesa-callback');
+  req.url = '/mpesa-callback';
+  paymentsRoutes(req, res, next);
+});
+app.post('/c2b-callback', (req, res, next) => {
+  console.log('[ALIAS] POST /c2b-callback -> /api/pay/c2b-callback');
+  req.url = '/c2b-callback';
+  paymentsRoutes(req, res, next);
+});
+app.post('/c2b-validation', (req, res, next) => {
+  console.log('[ALIAS] POST /c2b-validation -> /api/pay/c2b-validation');
+  req.url = '/c2b-validation';
+  paymentsRoutes(req, res, next);
+});
 
 app.get('/api/health', (req, res) => {
   res.json({
