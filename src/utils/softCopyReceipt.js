@@ -1,16 +1,17 @@
 // src/utils/softCopyReceipt.js
-// A4 soft-copy receipt generator.
-// Distinct from the ESC/POS thermal format — this is what customers keep as a PDF.
-// Same code path on mobile and desktop → same output everywhere.
+// 80mm-wide soft-copy receipt — fits phones natively, prints on thermal.
+// Modern, minimal, no distracting chrome.
 
 import jsPDF from 'jspdf';
 import QRCode from 'qrcode';
 
 const BLUE = [26, 42, 74];
 const ORANGE = [244, 123, 32];
-const GREY = [120, 120, 120];
+const GREEN = [5, 122, 5];
+const AMBER = [180, 120, 0];
+const GREY = [110, 110, 110];
 const LIGHT = [220, 224, 230];
-const ROW_ALT = [248, 250, 252];
+const ROW_ALT = [246, 249, 252];
 const WHITE = [255, 255, 255];
 const BLACK = [0, 0, 0];
 
@@ -68,121 +69,115 @@ const fmtTime = (s) => {
 };
 
 export const generateSoftCopyReceipt = async (sale) => {
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true });
-  const pageW = 210;
-  const pageH = 297;
-  const margin = 18;
+  const pageW = 80;
+  const items = sale.items || [];
+
+  // Dynamic height — grows with items
+  const baseHeight = 130;
+  const perItem = 8;
+  const qrBlock = 55;
+  const pageH = baseHeight + items.length * perItem + qrBlock;
+
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: [pageW, pageH],
+    compress: true,
+  });
+
+  const margin = 6;
   const contentW = pageW - margin * 2;
   const rightX = pageW - margin;
 
   const logo = await loadLogo();
   const signed = isSigned(sale);
   const kraPin = import.meta.env.VITE_VSCU_TIN || '';
-  const items = sale.items || [];
   const subtotal = Number(sale.subtotal || 0);
   const tax = Number(sale.tax || 0);
   const total = Number(sale.total || 0);
 
-  let y = margin;
+  let y = margin + 2;
 
-  // Top accent bar
-  doc.setFillColor(...BLUE);
-  doc.rect(0, 0, pageW, 4, 'F');
-
-  y = margin + 8;
-
-  // Logo (centered)
+  // ---- Logo (no accent bar above it) ----
   if (logo) {
-    const lh = 22;
-    const lw = (logo.naturalWidth / logo.naturalHeight) * lh;
     try {
-      doc.addImage(logo, 'PNG', (pageW - lw) / 2, y, lw, lh);
-      y += lh + 5;
-    } catch {}
+      const lh = 16;
+      const lw = (logo.naturalWidth / logo.naturalHeight) * lh;
+      const lx = (pageW - lw) / 2;
+      doc.addImage(logo, 'JPEG', lx, y, lw, lh, undefined, 'FAST');
+      y += lh + 4;
+    } catch (e) {
+      console.warn('logo addImage failed:', e);
+      y += 4;
+    }
+  } else {
+    y += 4;
   }
 
-  // Business name
-  doc.setFont('helvetica', 'bold').setFontSize(20).setTextColor(...BLUE);
+  // ---- Business name ----
+  doc.setFont('helvetica', 'bold').setFontSize(14).setTextColor(...BLUE);
   doc.text('EVOPAY CAR WASH', pageW / 2, y, { align: 'center' });
-  y += 7;
+  y += 5.5;
 
-  doc.setFont('helvetica', 'normal').setFontSize(10).setTextColor(...GREY);
+  doc.setFont('helvetica', 'normal').setFontSize(7.5).setTextColor(...GREY);
   doc.text('eTIMS Compliant Receipt', pageW / 2, y, { align: 'center' });
-  y += 5;
+  y += 4;
 
   if (kraPin) {
     doc.text(`KRA PIN: ${kraPin}`, pageW / 2, y, { align: 'center' });
-    y += 5;
+    y += 4;
   }
 
-  // Divider
-  doc.setDrawColor(...BLUE).setLineWidth(0.6);
+  // ---- Divider ----
+  doc.setDrawColor(...BLUE).setLineWidth(0.4);
   doc.line(margin, y, pageW - margin, y);
-  y += 10;
+  y += 6;
 
-  // "RECEIPT" title
-  doc.setFont('helvetica', 'bold').setFontSize(14).setTextColor(...ORANGE);
-  doc.text('RECEIPT', margin, y);
-  y += 9;
-
-  // Meta block (two columns)
-  const leftX = margin;
-  const leftValX = margin + 24;
-  const midX = pageW / 2 + 8;
-  const midValX = midX + 24;
-
-  const metaLeft = [
+  // ---- Meta rows ----
+  const metaRows = [
     ['Invoice', sale.invoice_no || 'N/A'],
+    ['Date', `${fmtDate(sale.created_at || sale.date)}  ${fmtTime(sale.created_at || sale.date)}`],
     ['Cashier', sale.cashier || 'Unknown'],
     ['Customer', sale.customer || 'Walk-in'],
-  ];
-  const metaRight = [
-    ['Date', fmtDate(sale.created_at || sale.date)],
-    ['Time', fmtTime(sale.created_at || sale.date)],
     ['Payment', paymentLabel(sale)],
   ];
 
-  const metaY = y;
-  metaLeft.forEach(([k, v], i) => {
-    doc.setFont('helvetica', 'normal').setFontSize(10).setTextColor(...GREY);
-    doc.text(k, leftX, metaY + i * 6);
+  metaRows.forEach(([k, v]) => {
+    doc.setFont('helvetica', 'normal').setFontSize(7.5).setTextColor(...GREY);
+    doc.text(k, margin, y);
     doc.setFont('helvetica', 'bold').setTextColor(...BLACK);
-    doc.text(v, leftValX, metaY + i * 6);
+    doc.text(String(v), rightX, y, { align: 'right' });
+    y += 4;
   });
-  metaRight.forEach(([k, v], i) => {
-    doc.setFont('helvetica', 'normal').setFontSize(10).setTextColor(...GREY);
-    doc.text(k, midX, metaY + i * 6);
-    doc.setFont('helvetica', 'bold').setTextColor(...BLACK);
-    doc.text(v, midValX, metaY + i * 6);
-  });
-  y = metaY + metaLeft.length * 6 + 6;
 
-  // Items table header
+  y += 2;
+
+  // ---- Items header ----
   doc.setFillColor(...BLUE);
-  doc.rect(margin, y, contentW, 8, 'F');
-  doc.setFont('helvetica', 'bold').setFontSize(9).setTextColor(...WHITE);
+  doc.rect(margin, y, contentW, 5.5, 'F');
+  doc.setFont('helvetica', 'bold').setFontSize(7).setTextColor(...WHITE);
 
-  const colQtyX = margin + contentW - 60;
-  const colPriceX = margin + contentW - 32;
-  const colTotalX = rightX - 3;
+  const colQtyX = margin + contentW - 32;
+  const colPriceX = margin + contentW - 18;
+  const colTotalX = rightX - 1.5;
 
-  doc.text('ITEM', margin + 3, y + 5.5);
-  doc.text('QTY', colQtyX, y + 5.5, { align: 'right' });
-  doc.text('PRICE', colPriceX, y + 5.5, { align: 'right' });
-  doc.text('TOTAL', colTotalX, y + 5.5, { align: 'right' });
-  y += 8;
+  doc.text('ITEM', margin + 1.5, y + 4);
+  doc.text('QTY', colQtyX, y + 4, { align: 'right' });
+  doc.text('PRICE', colPriceX, y + 4, { align: 'right' });
+  doc.text('TOTAL', colTotalX, y + 4, { align: 'right' });
+  y += 5.5;
 
-  // Item rows
-  doc.setFont('helvetica', 'normal').setFontSize(9).setTextColor(...BLACK);
+  // ---- Item rows ----
+  doc.setFont('helvetica', 'normal').setFontSize(7.5).setTextColor(...BLACK);
   items.forEach((it, idx) => {
     const name = it.item_name || it.name || 'Unknown';
     const qty = Number(it.quantity || 0);
     const price = Number(it.price || 0);
     const amount = Number(it.total || qty * price);
 
-    const nameWidth = colQtyX - (margin + 3) - 4;
+    const nameWidth = colQtyX - margin - 6;
     const lines = doc.splitTextToSize(name, nameWidth);
-    const rowH = Math.max(6.5, lines.length * 4.5 + 2);
+    const rowH = Math.max(5, lines.length * 3.2 + 1.5);
 
     if (idx % 2 === 0) {
       doc.setFillColor(...ROW_ALT);
@@ -190,78 +185,82 @@ export const generateSoftCopyReceipt = async (sale) => {
     }
 
     doc.setTextColor(...BLACK);
-    doc.text(lines, margin + 3, y + 5);
-    doc.text(String(qty), colQtyX, y + 5, { align: 'right' });
-    doc.text(price.toFixed(2), colPriceX, y + 5, { align: 'right' });
-    doc.text(amount.toFixed(2), colTotalX, y + 5, { align: 'right' });
+    doc.text(lines, margin + 1.5, y + 3.5);
+    doc.text(String(qty), colQtyX, y + 3.5, { align: 'right' });
+    doc.text(price.toFixed(2), colPriceX, y + 3.5, { align: 'right' });
+    doc.text(amount.toFixed(2), colTotalX, y + 3.5, { align: 'right' });
     y += rowH;
   });
 
-  doc.setDrawColor(...BLUE).setLineWidth(0.4);
+  // ---- Divider ----
+  doc.setDrawColor(...BLUE).setLineWidth(0.3);
   doc.line(margin, y, pageW - margin, y);
-  y += 8;
+  y += 5;
 
-  // Totals block
-  const totLabelX = pageW - margin - 62;
-  const totValX = rightX - 3;
-
-  doc.setFont('helvetica', 'normal').setFontSize(10).setTextColor(...GREY);
-  doc.text('Subtotal', totLabelX, y);
+  // ---- Totals ----
+  doc.setFont('helvetica', 'normal').setFontSize(8).setTextColor(...GREY);
+  doc.text('Subtotal', margin, y);
   doc.setTextColor(...BLACK);
-  doc.text(`KES ${subtotal.toFixed(2)}`, totValX, y, { align: 'right' });
-  y += 6;
+  doc.text(`KES ${subtotal.toFixed(2)}`, rightX, y, { align: 'right' });
+  y += 4.5;
 
   doc.setTextColor(...GREY);
-  doc.text('VAT (16%)', totLabelX, y);
+  doc.text('VAT (16%)', margin, y);
   doc.setTextColor(...BLACK);
-  doc.text(`KES ${tax.toFixed(2)}`, totValX, y, { align: 'right' });
-  y += 8;
+  doc.text(`KES ${tax.toFixed(2)}`, rightX, y, { align: 'right' });
+  y += 5.5;
 
-  // Grand total band
+  // ---- Grand total band ----
   doc.setFillColor(...BLUE);
-  doc.rect(totLabelX - 4, y - 5, rightX - totLabelX + 4 + 3, 12, 'F');
-  doc.setFont('helvetica', 'bold').setFontSize(13).setTextColor(...WHITE);
-  doc.text('TOTAL', totLabelX, y + 3);
-  doc.text(`KES ${total.toFixed(2)}`, totValX, y + 3, { align: 'right' });
-  y += 20;
+  doc.rect(margin, y - 3.5, contentW, 8, 'F');
+  doc.setFont('helvetica', 'bold').setFontSize(10.5).setTextColor(...WHITE);
+  doc.text('TOTAL', margin + 1.5, y + 1.5);
+  doc.text(`KES ${total.toFixed(2)}`, rightX - 1.5, y + 1.5, { align: 'right' });
+  y += 12;
 
-  // QR / verification
+  // ---- QR ----
   try {
     const target = buildQrTarget(sale);
-    const qrData = await QRCode.toDataURL(target, { width: 300, margin: 1, errorCorrectionLevel: 'M' });
-    const qrSize = 38;
+    const qrData = await QRCode.toDataURL(target, { width: 200, margin: 1, errorCorrectionLevel: 'M' });
+    const qrSize = 32;
     const qrX = (pageW - qrSize) / 2;
-    doc.addImage(qrData, 'PNG', qrX, y, qrSize, qrSize);
-    y += qrSize + 3;
+    doc.addImage(qrData, 'PNG', qrX, y, qrSize, qrSize, undefined, 'FAST');
+    y += qrSize + 2;
 
-    doc.setFont('helvetica', 'normal').setFontSize(8).setTextColor(...GREY);
+    doc.setFont('helvetica', 'normal').setFontSize(6.5).setTextColor(...GREY);
     doc.text(
       signed ? 'Scan to verify on KRA' : 'Scan to view receipt online',
       pageW / 2,
       y,
       { align: 'center' }
     );
-    y += 7;
+    y += 5;
   } catch {}
 
-  // Status badge
-  doc.setFont('helvetica', 'bold').setFontSize(10);
+  // ---- Status ----
   if (signed) {
-    doc.setTextColor(0, 130, 0);
+    doc.setFont('helvetica', 'bold').setFontSize(8).setTextColor(...GREEN);
     doc.text('KRA eTIMS VERIFIED', pageW / 2, y, { align: 'center' });
   } else {
-    doc.setTextColor(180, 120, 0);
-    doc.text('PENDING eTIMS SYNC', pageW / 2, y, { align: 'center' });
+    doc.setFont('helvetica', 'bold').setFontSize(8).setTextColor(...AMBER);
+    doc.text('NON-FISCAL RECEIPT', pageW / 2, y, { align: 'center' });
+    y += 3.5;
+    doc.setFont('helvetica', 'normal').setFontSize(6).setTextColor(...GREY);
+    doc.text('Pending eTIMS sync — not a KRA tax invoice', pageW / 2, y, { align: 'center' });
   }
+  y += 5;
 
-  // Footer
-  doc.setDrawColor(...LIGHT).setLineWidth(0.3);
-  doc.line(margin, pageH - 24, pageW - margin, pageH - 24);
+  // ---- Footer ----
+  doc.setDrawColor(...LIGHT).setLineWidth(0.2);
+  doc.line(margin, y, pageW - margin, y);
+  y += 4;
 
-  doc.setFont('helvetica', 'bold').setFontSize(11).setTextColor(...BLUE);
-  doc.text('Thank you for your business!', pageW / 2, pageH - 15, { align: 'center' });
-  doc.setFont('helvetica', 'normal').setFontSize(8).setTextColor(...GREY);
-  doc.text('Evopay Car Wash  |  KRA eTIMS VSCU v2.0.21', pageW / 2, pageH - 10, { align: 'center' });
+  doc.setFont('helvetica', 'bold').setFontSize(8.5).setTextColor(...BLUE);
+  doc.text('Thank you for your business!', pageW / 2, y, { align: 'center' });
+  y += 3.5;
+
+  doc.setFont('helvetica', 'normal').setFontSize(6).setTextColor(...GREY);
+  doc.text('Evopay Car Wash  |  KRA eTIMS VSCU v2.0.21', pageW / 2, y, { align: 'center' });
 
   return doc;
 };
