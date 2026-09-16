@@ -7,7 +7,7 @@ export const getLogoBase64 = async () => {
 
   try {
     console.log('Fetching logo...');
-    const response = await fetch('/evopay-logo.png');
+    const response = await fetch('/evopay-logo.jpg');
     console.log('Response status:', response.status);
     
     if (!response.ok) {
@@ -41,5 +41,5 @@ export const getLogoBase64 = async () => {
 };
 
 export const getLogoUrl = () => {
-  return '/evopay-logo.png';
+  return '/evopay-logo.jpg';
 };

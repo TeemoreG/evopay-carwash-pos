@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import evopayLogo from '../assets/evopay-logo.png';
+import evopayLogo from '../assets/evopay-logo.jpg';
 import axiosInstance from '../api/axiosConfig';
 
 const Login = () => {

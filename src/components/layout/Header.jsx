@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import evopayLogo from '../../assets/evopay-logo.png';
+import evopayLogo from '../../assets/evopay-logo.jpg';
 import { getCachedConfig, fetchPrinterConfig } from '../../utils/printer';
 
 const Header = ({ setSidebarOpen, sidebarOpen }) => {

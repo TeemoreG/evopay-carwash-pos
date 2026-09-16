@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
-import evopayLogo from '../../assets/evopay-logo.png';
+import evopayLogo from '../../assets/evopay-logo.jpg';
 
 const XReport = ({ data, loading }) => {
   const logoRef = useRef(null);

@@ -25,7 +25,7 @@ const loadLogo = () => {
     img.crossOrigin = 'anonymous';
     img.onload = () => { cachedLogo = img; resolve(img); };
     img.onerror = () => { cachedLogoPromise = null; resolve(null); };
-    img.src = '/evopay-logo.png';
+    img.src = '/evopay-logo.jpg';
   });
   return cachedLogoPromise;
 };

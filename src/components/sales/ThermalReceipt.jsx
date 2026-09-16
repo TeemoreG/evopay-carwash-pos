@@ -27,7 +27,7 @@ const loadLogoDataURL = () => {
       cachedLogoPromise = null;
       resolve(null);
     };
-    img.src = '/evopay-logo.png';
+    img.src = '/evopay-logo.jpg';
   });
   return cachedLogoPromise;
 };
@@ -488,7 +488,7 @@ const ThermalReceipt = ({ sale, onClose, onDownload, onPrint }) => {
               <div className="flex justify-center mb-2">
                 <img
                   ref={logoRef}
-                  src="/evopay-logo.png"
+                  src="/evopay-logo.jpg"
                   alt="Evopay Logo"
                   className="h-14 object-contain"
                   onError={(e) => (e.target.style.display = 'none')}

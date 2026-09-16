@@ -4,7 +4,7 @@ export const getLogoBase64 = async () => {
   if (cachedLogo) return cachedLogo;
 
   try {
-    const response = await fetch('/evopay-logo.png');
+    const response = await fetch('/evopay-logo.jpg');
     if (!response.ok) {
       throw new Error(`Logo fetch failed with status: ${response.status}`);
     }
