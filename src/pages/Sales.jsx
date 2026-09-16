@@ -471,7 +471,7 @@ const Sales = () => {
         )}
       </div>
 
-      {mobileTab !== 'cart' && (
+      {mobileTab === 'cart' &&  (
         <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-3 z-30 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs text-slate-500">
