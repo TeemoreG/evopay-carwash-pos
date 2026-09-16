@@ -9,7 +9,7 @@ const ReceiptView = () => {
   const [sale, setSale] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [downloading, setDownloading] = useState(false);
+  const [opening, setOpening] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -25,18 +25,20 @@ const ReceiptView = () => {
     load();
   }, [invoice]);
 
-  const handleDownload = async () => {
+  const handleViewPdf = async () => {
     if (!sale) return;
-    setDownloading(true);
+    setOpening(true);
     try {
       const doc = await generateSoftCopyReceipt(sale);
-      doc.save(`receipt-${sale.invoice_no || Date.now()}.pdf`);
-      toast.success('Receipt downloaded');
+      const blob = doc.output('blob');
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank', 'noopener');
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
     } catch (e) {
-      console.error('Download failed:', e);
-      toast.error('Download failed');
+      console.error('PDF open failed:', e);
+      toast.error('Could not open receipt');
     } finally {
-      setDownloading(false);
+      setOpening(false);
     }
   };
 
@@ -148,11 +150,11 @@ const ReceiptView = () => {
           </div>
 
           <button
-            onClick={handleDownload}
-            disabled={downloading}
+            onClick={handleViewPdf}
+            disabled={opening}
             className="w-full text-center bg-[#f47b20] hover:bg-[#e06d1a] text-white py-3 rounded-lg font-bold text-sm transition disabled:opacity-60"
           >
-            {downloading ? 'Generating PDF...' : 'Download PDF Receipt'}
+            {opening ? 'Opening...' : 'View PDF Receipt'}
           </button>
         </div>
 
