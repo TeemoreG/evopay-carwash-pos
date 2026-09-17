@@ -131,7 +131,7 @@ async function streamReceiptPdf(sale, publicBase, res) {
 
   // ---- Business name ----
   doc.font('Helvetica-Bold').fontSize(15).fillColor(BLUE)
-     .text('EVOPAY CAR WASH', margin, y, { width: contentW, align: 'center' });
+     .text('CAR WASH', margin, y, { width: contentW, align: 'center' });
   y += 20;
 
   doc.font('Helvetica').fontSize(8).fillColor(GREY)
