@@ -2,6 +2,7 @@ const PDFDocument = require('pdfkit');
 const QRCode = require('qrcode');
 const https = require('https');
 const http = require('http');
+const sizeOf = require('image-size');
 
 const BLUE = '#1a2a4a';
 const ORANGE = '#f47b20';
@@ -127,13 +128,29 @@ async function streamReceiptPdf(sale, publicBase, res) {
 
   let y = margin;
 
-  // ---- Logo (centered, no accent bar) ----
+    // ---- Logo (centered, preserves actual aspect ratio) ----
   try {
     const logoUrl = `${publicBase}/evopay-logo.jpg`;
     const buf = await fetchImageBuffer(logoUrl);
     if (buf) {
-      const logoH = mmToPt(14);
-      const logoW = logoH * 3;
+      let logoW, logoH;
+      try {
+        const dims = sizeOf(buf);
+        const targetH = mmToPt(14);
+        logoH = targetH;
+        logoW = (dims.width / dims.height) * targetH;
+      } catch (sizeErr) {
+        // Fallback to 3:1 if image-size fails
+        logoH = mmToPt(14);
+        logoW = logoH * 3;
+      }
+      // Clamp to content width just in case
+      const maxW = contentW * 0.6;
+      if (logoW > maxW) {
+        const scale = maxW / logoW;
+        logoW = maxW;
+        logoH = logoH * scale;
+      }
       doc.image(buf, (pageW - logoW) / 2, y, { width: logoW, height: logoH });
       y += logoH + mmToPt(4);
     }
@@ -237,7 +254,7 @@ async function streamReceiptPdf(sale, publicBase, res) {
   doc.text('TOTAL', margin + 6, y);
   doc.text(`KES ${total.toFixed(2)}`, totLabelX, y, { width: contentW - 6, align: 'right' });
   y += 22;
-  
+
   // ---- QR ----
   try {
     const target = buildQrTarget(sale, publicBase);
