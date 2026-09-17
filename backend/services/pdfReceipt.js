@@ -178,16 +178,17 @@ async function streamReceiptPdf(sale, publicBase, res) {
 
   y += 4;
 
-  // ---- Items header ----
+    // ---- Items header ----
   const colQtyX = margin + contentW * 0.60;
   const colTotalX = rightX;
 
-  doc.rect(margin, y, contentW, 16).fill(BLUE);
-  doc.font('Helvetica-Bold').fontSize(7.5).fillColor(WHITE);
-  doc.text('ITEM', margin + 6, y + 5);
-  doc.text('QTY', colQtyX, y + 5, { width: 30, align: 'right' });
-  doc.text('TOTAL', colTotalX - 60, y + 5, { width: 60, align: 'right' });
-  y += 16;
+  doc.font('Helvetica-Bold').fontSize(7.5).fillColor(BLUE);
+  doc.text('ITEM', margin + 6, y + 4);
+  doc.text('QTY', colQtyX, y + 4, { width: 30, align: 'right' });
+  doc.text('TOTAL', colTotalX - 60, y + 4, { width: 60, align: 'right' });
+  y += 12;
+  doc.strokeColor(LIGHT).lineWidth(0.5).moveTo(margin, y).lineTo(rightX, y).stroke();
+  y += 6;
 
   // ---- Item rows ----
   items.forEach((it, idx) => {
@@ -214,7 +215,7 @@ async function streamReceiptPdf(sale, publicBase, res) {
   doc.strokeColor(BLUE).lineWidth(0.5).moveTo(margin, y).lineTo(rightX, y).stroke();
   y += 12;
 
-  // ---- Totals ----
+    // ---- Totals ----
   const totLabelX = margin;
   const totValX = rightX;
 
@@ -225,15 +226,18 @@ async function streamReceiptPdf(sale, publicBase, res) {
 
   doc.fillColor(GREY).text('VAT (16%)', totLabelX, y);
   doc.fillColor(BLACK).text(`KES ${tax.toFixed(2)}`, totLabelX, y, { width: contentW, align: 'right' });
-  y += 15;
+  y += 18;
 
-  // Grand total band
-  doc.rect(margin, y - 3, contentW, 20).fill(BLUE);
-  doc.font('Helvetica-Bold').fontSize(11).fillColor(WHITE);
-  doc.text('TOTAL', margin + 6, y + 2);
-  doc.text(`KES ${total.toFixed(2)}`, totLabelX, y + 2, { width: contentW - 6, align: 'right' });
-  y += 28;
+  // Thin blue line above grand total
+  doc.strokeColor(BLUE).lineWidth(0.6).moveTo(margin, y - 3).lineTo(rightX, y - 3).stroke();
+  y += 6;
 
+  // Grand total — no bar, bold blue text only
+  doc.font('Helvetica-Bold').fontSize(12).fillColor(BLUE);
+  doc.text('TOTAL', margin + 6, y);
+  doc.text(`KES ${total.toFixed(2)}`, totLabelX, y, { width: contentW - 6, align: 'right' });
+  y += 22;
+  
   // ---- QR ----
   try {
     const target = buildQrTarget(sale, publicBase);
