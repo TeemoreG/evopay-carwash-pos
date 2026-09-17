@@ -13,7 +13,7 @@ const PaymentBar = ({ total, disabled, onCash, onQR, cashLoading, qrLoading }) =
             <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.418 0V4h-5m5.582 0A9 9 0 1112 3" />
             </svg>
-            Saving...
+            Selling...
           </>
         ) : (
           <>
@@ -35,7 +35,7 @@ const PaymentBar = ({ total, disabled, onCash, onQR, cashLoading, qrLoading }) =
             <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.418 0V4h-5m5.582 0A9 9 0 1112 3" />
             </svg>
-            Creating...
+            Initiating sale...
           </>
         ) : (
           <>
