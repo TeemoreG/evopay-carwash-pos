@@ -298,7 +298,7 @@ async function materializeSale(session) {
   // ============================================
   const phone = session.customer_phone;
   if (phone) {
-    const receiptUrl = `${PUBLIC_BASE_URL}/receipt/${invoiceNo}`;
+        const receiptUrl = `${PUBLIC_BASE_URL}/api/receipts/${invoiceNo}/pdf`;
     const message = buildReceiptMessage({
       invoiceNo,
       amount: cart.total,
