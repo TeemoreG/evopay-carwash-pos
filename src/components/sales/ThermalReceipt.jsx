@@ -234,17 +234,17 @@ export const generateThermalReceipt = async (saleData, logoRef = null, paperWidt
 const xQty = leftCol + usableWidth * 0.54;
 const xPrice = leftCol + usableWidth * 0.74;
 const xTotal = rightCol;
-    // ---- Logo ----
+
     if (logoEl) {
-      try {
-        const logoHeight = isNarrow ? 11 : 13;
-        const logoWidth = (logoEl.naturalWidth / logoEl.naturalHeight) * logoHeight;
-        doc.addImage(logoEl, 'PNG', (pageWidth - logoWidth) / 2, y, logoWidth, logoHeight);
-        y += logoHeight + 2.5;
-      } catch (e) {
-        console.warn('logo addImage failed:', e);
-      }
-    }
+  try {
+    const logoWidth = usableWidth * 0.75;
+    const logoHeight = (logoEl.naturalHeight / logoEl.naturalWidth) * logoWidth;
+    doc.addImage(logoEl, 'JPEG', (pageWidth - logoWidth) / 2, y, logoWidth, logoHeight, undefined, 'FAST');
+    y += logoHeight + 2.5;
+  } catch (e) {
+    console.warn('logo addImage failed:', e);
+  }
+}
 
     doc.setFont('courier', 'bold').setFontSize(brandFont).setTextColor(...blue);
     doc.text('CAR WASH', pageWidth / 2, y, { align: 'center' });

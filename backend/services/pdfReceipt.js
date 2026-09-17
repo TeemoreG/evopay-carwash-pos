@@ -4,15 +4,16 @@ const https = require('https');
 const http = require('http');
 const sizeOf = require('image-size');
 
-const BLUE = '#1a2a4a';
-const ORANGE = '#f47b20';
+const BLUE = '#000000';
+const ORANGE = '#E35904';
 const GREY = '#6e6e6e';
-const LIGHT = '#dcdce0';
-const ROW_ALT = '#f6f9fc';
+const LIGHT = '#CCCCCC';
+const ROW_ALT = '#F5F5F5';
 const GREEN = '#057a05';
-const AMBER = '#b47800';
+const AMBER = '#E35904';
 const BLACK = '#000000';
 const WHITE = '#ffffff';
+
 
 const paymentLabel = (sale) => {
   const m = String(sale.payment_method || '').trim();
@@ -128,28 +129,18 @@ async function streamReceiptPdf(sale, publicBase, res) {
 
   let y = margin;
 
-    // ---- Logo (centered, preserves actual aspect ratio) ----
+      // ---- Logo (centered, sized by width to avoid stretch) ----
   try {
     const logoUrl = `${publicBase}/evopay-logo.jpg`;
     const buf = await fetchImageBuffer(logoUrl);
     if (buf) {
-      let logoW, logoH;
+      let logoW = contentW * 0.75;
+      let logoH;
       try {
         const dims = sizeOf(buf);
-        const targetH = mmToPt(14);
-        logoH = targetH;
-        logoW = (dims.width / dims.height) * targetH;
+        logoH = (dims.height / dims.width) * logoW;
       } catch (sizeErr) {
-        // Fallback to 3:1 if image-size fails
-        logoH = mmToPt(14);
-        logoW = logoH * 3;
-      }
-      // Clamp to content width just in case
-      const maxW = contentW * 0.6;
-      if (logoW > maxW) {
-        const scale = maxW / logoW;
-        logoW = maxW;
-        logoH = logoH * scale;
+        logoH = logoW * 0.55;
       }
       doc.image(buf, (pageW - logoW) / 2, y, { width: logoW, height: logoH });
       y += logoH + mmToPt(4);

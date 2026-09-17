@@ -5,15 +5,15 @@
 import jsPDF from 'jspdf';
 import QRCode from 'qrcode';
 
-const BLUE = [26, 42, 74];
-const ORANGE = [244, 123, 32];
-const GREEN = [5, 122, 5];
-const AMBER = [180, 120, 0];
-const GREY = [110, 110, 110];
-const LIGHT = [220, 224, 230];
-const ROW_ALT = [246, 249, 252];
-const WHITE = [255, 255, 255];
 const BLACK = [0, 0, 0];
+const BLUE = [0, 0, 0];
+const ORANGE = [227, 89, 4];
+const GREY = [110, 110, 110];
+const LIGHT = [204, 204, 204];
+const ROW_ALT = [245, 245, 245];
+const WHITE = [255, 255, 255];
+const GREEN = [5, 122, 5];
+const AMBER = [227, 89, 4];
 
 let cachedLogo = null;
 let cachedLogoPromise = null;
@@ -110,21 +110,14 @@ export const generateSoftCopyReceipt = async (sale) => {
 
   let y = margin + 2;
 
-  // ---- Logo (no accent bar above it) ----
   if (logo) {
-    try {
-      const lh = 16;
-      const lw = (logo.naturalWidth / logo.naturalHeight) * lh;
-      const lx = (pageW - lw) / 2;
-      doc.addImage(logo, 'JPEG', lx, y, lw, lh, undefined, 'FAST');
-      y += lh + 4;
-    } catch (e) {
-      console.warn('logo addImage failed:', e);
-      y += 4;
-    }
-  } else {
-    y += 4;
-  }
+  const lw = contentW * 0.75;
+  const lh = (logo.naturalHeight / logo.naturalWidth) * lw;
+  try {
+    doc.addImage(logo, 'JPEG', (pageW - lw) / 2, y, lw, lh, undefined, 'FAST');
+    y += lh + 5;
+  } catch {}
+}
 
   // ---- Business name ----
   doc.setFont('helvetica', 'bold').setFontSize(14).setTextColor(...BLUE);
