@@ -54,18 +54,30 @@ const buildQrTarget = (sale) => {
   return `${base}/receipt/${encodeURIComponent(sale.invoice_no || '')}`;
 };
 
+const TZ = 'Africa/Nairobi';
+
 const fmtDate = (s) => {
   if (!s) return 'N/A';
   const d = new Date(s);
   if (isNaN(d)) return String(s);
-  return d.toLocaleDateString('en-KE', { day: '2-digit', month: 'short', year: 'numeric' });
+  return d.toLocaleDateString('en-KE', {
+    timeZone: TZ,
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
 };
 
 const fmtTime = (s) => {
   if (!s) return '';
   const d = new Date(s);
   if (isNaN(d)) return '';
-  return d.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit', hour12: false });
+  return d.toLocaleTimeString('en-KE', {
+    timeZone: TZ,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
 };
 
 export const generateSoftCopyReceipt = async (sale) => {

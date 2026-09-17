@@ -371,7 +371,7 @@ const Sales = () => {
   const itemCount = lines.reduce((s, l) => s + l.qty, 0);
 
   const todayStats = useMemo(() => {
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Nairobi' });
     const todaySales = sales.filter(s =>
       (s.created_at || s.date || '').slice(0, 10) === todayStr
     );

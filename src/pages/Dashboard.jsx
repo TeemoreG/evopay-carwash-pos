@@ -208,7 +208,7 @@ const Dashboard = () => {
       const totalTax = sales.reduce((s, x) => s + (x.tax || 0), 0);
       const pendingSync = summary.pending ?? sales.filter(s => s.status === 'Pending').length;
 
-      const todayStr = new Date().toISOString().split('T')[0];
+      const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Nairobi' });
       const todayArr = sales.filter(s => getTs(s).slice(0, 10) === todayStr);
       const todayRevenue = todayArr.reduce((s, x) => s + (x.total || 0), 0);
 
