@@ -602,7 +602,7 @@ const Dashboard = () => {
               />
             </div>
           </div>
-          <RecentSales sales={filteredSales} loading={loading} onViewAll={() => navigate('/sales')} />
+          <RecentSales sales={filteredSales} loading={loading} onViewAll={() => navigate('/sales-history')} />
         </div>
 
         <div className="space-y-3 sm:space-y-4">

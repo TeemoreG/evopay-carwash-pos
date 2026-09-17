@@ -9,7 +9,7 @@ const fmtTs = (s) => {
   });
 };
 
-const SalesHistory = ({ sales, loading, onRetry, onDownloadReceipt }) => {
+const SalesHistory = ({ sales, loading, onRetry, onDownloadReceipt, onViewDetails }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
@@ -100,7 +100,11 @@ const SalesHistory = ({ sales, loading, onRetry, onDownloadReceipt }) => {
                 <td colSpan="10" className="text-center py-8 text-slate-400 text-sm">No sales on this page.</td>
               </tr>
             ) : currentSales.map((sale, index) => (
-              <tr key={sale.id || index} className="border-b border-slate-100 hover:bg-slate-50 transition">
+              <tr
+                key={sale.id || index}
+                onClick={() => onViewDetails && onViewDetails(sale)}
+                className="border-b border-slate-100 hover:bg-slate-50 transition cursor-pointer"
+              >
                 <td className="py-2.5 font-mono text-xs font-semibold text-[#1a2a4a] whitespace-nowrap">
                   {sale.invoice_no || sale.invoiceNo || 'N/A'}
                 </td>
@@ -133,7 +137,11 @@ const SalesHistory = ({ sales, loading, onRetry, onDownloadReceipt }) => {
                   <div className="flex items-center justify-center gap-1.5">
                     {getSyncBadge(sale.status, sale.synced)}
                     {sale.status === 'Failed' && onRetry && (
-                      <button onClick={() => onRetry(sale.id)} className="text-[10px] text-[#f47b20] hover:underline font-medium" title="Retry sync">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onRetry(sale.id); }}
+                        className="text-[10px] text-[#f47b20] hover:underline font-medium"
+                        title="Retry sync"
+                      >
                         Retry
                       </button>
                     )}
@@ -141,7 +149,7 @@ const SalesHistory = ({ sales, loading, onRetry, onDownloadReceipt }) => {
                 </td>
                 <td className="py-2.5 text-center">
                   <button
-                    onClick={() => onDownloadReceipt && onDownloadReceipt(sale)}
+                    onClick={(e) => { e.stopPropagation(); onDownloadReceipt && onDownloadReceipt(sale); }}
                     className="bg-[#1a2a4a] hover:bg-[#0f1a33] text-white p-1.5 rounded-lg transition"
                     title="Download Receipt"
                   >

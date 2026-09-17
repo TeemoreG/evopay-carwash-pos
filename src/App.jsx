@@ -21,6 +21,7 @@ import Customers from './pages/Customers.jsx';
 import PayPage from './pages/PayPage.jsx';
 import ReceiptView from './pages/ReceiptView.jsx';
 import AdminRoute from './components/AdminRoute.jsx';
+import SalesHistoryPage from './pages/SalesHistory.jsx';
 
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
@@ -74,6 +75,7 @@ function App() {
           <Route path="settings" element={<Settings />} />
           <Route path="reports" element={<Reports />} />
           <Route path="legal" element={<Legal />} />
+          <Route path="sales-history" element={<SalesHistoryPage />} />
           <Route path="cashiers" element={<AdminRoute><Cashiers /></AdminRoute>} />
         </Route>
 
