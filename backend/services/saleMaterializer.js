@@ -2,7 +2,9 @@
 const db = require('../db');
 const vscuClient = require('./vscuClient');
 const { sendSms, buildReceiptMessage } = require('./smsService');
-const PUBLIC_BASE_URL = process.env.VITE_PAYMENT_BASE_URL || 'https://evopay-carwash-pos.onrender.com';
+const PUBLIC_BASE_URL = (process.env.VITE_PAYMENT_BASE_URL || 'https://evopay-carwash-pos.onrender.com')
+  .trim()
+  .replace(/\s+/g, '');
 
 const round2 = (num) => Math.round((num || 0) * 100) / 100;
 
@@ -298,7 +300,7 @@ async function materializeSale(session) {
   // ============================================
   const phone = session.customer_phone;
   if (phone) {
-        const receiptUrl = `${PUBLIC_BASE_URL}/api/receipts/${invoiceNo}/pdf`;
+    const receiptUrl = `${PUBLIC_BASE_URL}/api/receipts/${invoiceNo}/pdf`;
     const message = buildReceiptMessage({
       invoiceNo,
       amount: cart.total,
