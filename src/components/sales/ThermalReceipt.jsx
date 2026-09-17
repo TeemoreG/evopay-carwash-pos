@@ -240,7 +240,7 @@ const xTotal = rightCol;
     const logoWidth = usableWidth * 0.5;
     const logoHeight = (logoEl.naturalHeight / logoEl.naturalWidth) * logoWidth;
     doc.addImage(logoEl, 'JPEG', (pageWidth - logoWidth) / 2, y, logoWidth, logoHeight, undefined, 'FAST');
-    y += logoHeight + 2.5;
+    y += logoHeight + 1;
   } catch (e) {
     console.warn('logo addImage failed:', e);
   }

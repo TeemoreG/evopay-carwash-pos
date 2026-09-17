@@ -143,7 +143,7 @@ async function streamReceiptPdf(sale, publicBase, res) {
         logoH = logoW * 0.55;
       }
       doc.image(buf, (pageW - logoW) / 2, y, { width: logoW, height: logoH });
-      y += logoH + mmToPt(4);
+        y += logoH + mmToPt(1);
     }
   } catch (e) {
     console.warn('[PDF] logo failed:', e.message);
