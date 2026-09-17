@@ -7,6 +7,9 @@ const { streamReceiptPdf } = require('../services/pdfReceipt');
 const PUBLIC_BASE_URL = (process.env.VITE_PAYMENT_BASE_URL || 'https://evopay-carwash-pos.onrender.com')
   .trim()
   .replace(/\s+/g, '');
+const RECEIPT_BASE_URL = (process.env.RECEIPT_BASE_URL || PUBLIC_BASE_URL)
+  .trim()
+  .replace(/\s+/g, '');
 
 // ==================== DIRECT PDF STREAM ====================
 // SMS links here. Server generates the PDF and streams it directly.
@@ -94,7 +97,7 @@ router.post('/:invoice_no/send-sms', async (req, res) => {
     }
 
     // Point SMS at the PDF endpoint — customer lands on PDF directly
-    const receiptUrl = `${PUBLIC_BASE_URL}/api/receipts/${invoice_no}/pdf`;
+    const receiptUrl = `${RECEIPT_BASE_URL}/api/receipts/${invoice_no}/pdf`;
     const message = buildReceiptMessage({
       invoiceNo: invoice_no,
       amount: sale.total,
