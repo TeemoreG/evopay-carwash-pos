@@ -539,7 +539,7 @@ const ThermalReceipt = ({ sale, onClose, onDownload, onPrint }) => {
                   const name = item.item_name || item.name || 'Unknown';
                   return (
                     <div key={idx} className="flex gap-1 mb-1 items-start">
-                      <div className="flex-1 break-words">{name}</div>
+                      <div className="flex-1 wrap-break-words">{name}</div>
                       <div className="w-8 text-right shrink-0">{qty}</div>
                       <div className="w-14 text-right shrink-0">{price.toFixed(0)}</div>
                       <div className="w-16 text-right shrink-0">{amount.toFixed(0)}</div>
