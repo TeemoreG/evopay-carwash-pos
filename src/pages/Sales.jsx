@@ -13,6 +13,7 @@ import {
   getSaleByInvoice, cancelPaymentSession, sendReceiptSms,
 } from '../api/vscuApi';
 import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 const TAX_RATES = { A: 0, B: 0.16, C: 0 };
 
@@ -36,6 +37,7 @@ const Sales = () => {
   const [smsSending, setSmsSending] = useState(false);
   const [now, setNow] = useState(new Date());
   const [mobileTab, setMobileTab] = useState('services');
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchData();
@@ -493,13 +495,8 @@ const Sales = () => {
       )}
 
       <div className="hidden lg:block p-3 sm:p-4 lg:pt-0">
-        <RecentSalesPanel
-          sales={sales}
-          loading={loading}
-          onRetry={handleRetrySync}
-          onDownloadReceipt={handleDownloadReceipt}
-        />
-      </div>
+  <RecentSalesPanel sales={sales} loading={loading} />
+</div>
 
       <div className="hidden lg:flex fixed bottom-3 right-3 items-center gap-3 bg-white/95 border border-slate-200 rounded-lg px-3 py-2 text-[10px] text-slate-500 shadow-sm z-20">
         <span className="flex items-center gap-1">
