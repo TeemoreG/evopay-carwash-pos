@@ -115,7 +115,7 @@ export const generateSoftCopyReceipt = async (sale) => {
   const lh = (logo.naturalHeight / logo.naturalWidth) * lw;
   try {
     doc.addImage(logo, 'JPEG', (pageW - lw) / 2, y, lw, lh, undefined, 'FAST');
-    y += lh + 2;
+    y += lh - 3;
   } catch {}
 }
 
