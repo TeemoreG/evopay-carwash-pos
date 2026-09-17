@@ -11,9 +11,10 @@ import {
   Timer, Gauge, Users, Banknote, CreditCard, Smartphone, Sparkles,
   Trophy, Target, ArrowDownRight,
 } from 'lucide-react';
+import { toast } from 'react-toastify';
 
 import RecentSales from '../components/dashboard/RecentSales';
-import { getSales, getItems, getStock, checkVSCUStatus, getSalesStats } from '../api/vscuApi';
+import { getSales, getItems, getStock, checkVSCUStatus, getSalesStats, processSync } from '../api/vscuApi';
 
 const PIE_COLORS = ['#f47b20', '#1a2a4a', '#10b981', '#8b5cf6', '#ec4899'];
 
@@ -28,6 +29,7 @@ const Dashboard = () => {
     revenuePerCar: 0, peakHour: '—', peakHourCount: 0,
     carsPerHour: 0, openHours: 0,
     topService: '—', weekRevenue: 0, monthRevenue: 0,
+    topProductName: '—', topProductRevenue: 0,
   });
   const [recentSales, setRecentSales] = useState([]);
   const [topServices, setTopServices] = useState([]);
@@ -39,6 +41,7 @@ const Dashboard = () => {
   const [oldestPending, setOldestPending] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [vscuStatus, setVscuStatus] = useState({ connected: false, checking: true });
   const [searchQuery, setSearchQuery] = useState('');
@@ -64,6 +67,33 @@ const Dashboard = () => {
       setVscuStatus({ connected: r.data?.online === true, checking: false });
     } catch {
       setVscuStatus({ connected: false, checking: false });
+    }
+  };
+
+  // ==================== RESOLVE SYNC ====================
+  const handleResolveSync = async () => {
+    if (syncing) return;
+    if (!vscuStatus.connected) {
+      toast.warn('VSCU offline — try again later');
+      return;
+    }
+    setSyncing(true);
+    try {
+      const r = await processSync();
+      const data = r?.data || {};
+      if (data.success === false) {
+        toast.warn(data.message || 'VSCU offline — try again later');
+      } else if (data.synced > 0 || data.failed > 0) {
+        toast.success(`Synced ${data.synced || 0}, failed ${data.failed || 0}`);
+      } else {
+        toast.info(data.message || 'Nothing to sync');
+      }
+      await fetchDashboardData();
+    } catch (e) {
+      console.error('Sync failed:', e);
+      toast.error('Sync failed: ' + (e?.response?.data?.error || e.message));
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -227,6 +257,13 @@ const Dashboard = () => {
         products.some(prd => (prd.item_name || prd.itemNm) === x.name)
       );
 
+      // Top product of the DAY
+      const todayItemSales = calculateTopServices(todayArr);
+      const todayProductSales = todayItemSales.filter(x =>
+        products.some(prd => (prd.item_name || prd.itemNm) === x.name)
+      );
+      const topProductOfDay = todayProductSales[0] || null;
+
       setStats({
         totalServices: services.length, totalProducts: products.length,
         totalSales: sales.length, totalRevenue, stockValue, pendingSync,
@@ -237,6 +274,8 @@ const Dashboard = () => {
         carsPerHour, openHours,
         topService: topSvc,
         weekRevenue, monthRevenue,
+        topProductName: topProductOfDay?.name || '—',
+        topProductRevenue: topProductOfDay?.revenue || 0,
       });
 
       const sorted = [...sales].sort((a, b) => new Date(getTs(b)) - new Date(getTs(a)));
@@ -326,8 +365,8 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Hero Stats — compact */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+      {/* Hero Stats — 5 tiles now */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-3">
         <div className="bg-white p-3 sm:p-4 rounded-xl border border-slate-200/80 shadow-sm">
           <div className="flex items-start justify-between gap-1">
             <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-slate-400">Today</p>
@@ -375,6 +414,23 @@ const Dashboard = () => {
 
         <div className="bg-white p-3 sm:p-4 rounded-xl border border-slate-200/80 shadow-sm">
           <div className="flex items-start justify-between gap-1">
+            <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-slate-400">Top Product Today</p>
+            <div className="p-1.5 bg-violet-50 rounded-md">
+              <Trophy className="w-4 h-4 text-violet-600" />
+            </div>
+          </div>
+          <h3 className="text-sm sm:text-base font-extrabold text-[#1a2a4a] mt-1.5 leading-tight truncate" title={stats.topProductName}>
+            {stats.topProductName}
+          </h3>
+          <p className="text-xs text-slate-500 mt-1">
+            {stats.topProductRevenue > 0
+              ? <>Revenue: <span className="font-semibold text-slate-700">KES {stats.topProductRevenue.toLocaleString()}</span></>
+              : <span className="text-slate-400">No product sales</span>}
+          </p>
+        </div>
+
+        <div className="bg-white p-3 sm:p-4 rounded-xl border border-slate-200/80 shadow-sm">
+          <div className="flex items-start justify-between gap-1">
             <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-slate-400">Pending Sync</p>
             <div className={`p-1.5 rounded-md ${stats.pendingSync > 0 ? 'bg-amber-50' : 'bg-emerald-50'}`}>
               <AlertTriangle className={`w-4 h-4 ${stats.pendingSync > 0 ? 'text-amber-600' : 'text-emerald-600'}`} />
@@ -386,8 +442,12 @@ const Dashboard = () => {
             {stats.pendingSync}
           </h3>
           {stats.pendingSync > 0 ? (
-            <button onClick={() => navigate('/sales')} className="text-xs text-[#f47b20] font-semibold mt-1 flex items-center gap-0.5">
-              Resolve <ArrowUpRight className="w-3 h-3" />
+            <button
+              onClick={handleResolveSync}
+              disabled={syncing}
+              className="text-xs text-[#f47b20] font-semibold mt-1 flex items-center gap-0.5 disabled:opacity-60"
+            >
+              {syncing ? 'Syncing...' : 'Resolve'} <ArrowUpRight className="w-3 h-3" />
             </button>
           ) : (
             <p className="text-xs text-emerald-600 font-semibold mt-1">All synced</p>
