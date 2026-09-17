@@ -93,9 +93,18 @@ async function sendSms({ to, message, refId }) {
 /**
  * Build receipt SMS message.
  */
-function buildReceiptMessage({ invoiceNo, amount, receiptUrl, businessName = 'Evopay Car Wash' }) {
+/**
+ * Build receipt SMS message.
+ * Includes customer name, amount, thank-you, and PDF link.
+ * Kept concise to stay within 160-char SMS billing unit where possible.
+ */
+function buildReceiptMessage({ invoiceNo, amount, receiptUrl, customerName, businessName = 'Evopay Car Wash' }) {
   const amt = Number(amount || 0).toLocaleString();
   const cleanUrl = String(receiptUrl || '').trim().replace(/\s+/g, '');
-  return `${businessName}: Receipt ${invoiceNo} for KES ${amt}. View: ${cleanUrl}`;
+  const name = String(customerName || '').trim();
+  const greeting = name && name.toLowerCase() !== 'walk-in customer' && name.toLowerCase() !== 'walk-in'
+    ? `Hi ${name}, `
+    : 'Hi, ';
+  return `${greeting}thank you for choosing ${businessName}. Your receipt for KES ${amt} (${invoiceNo}) is ready: ${cleanUrl}`;
 }
 module.exports = { sendSms, normalizePhone, buildReceiptMessage };

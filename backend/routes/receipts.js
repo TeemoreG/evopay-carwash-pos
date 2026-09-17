@@ -98,10 +98,11 @@ router.post('/:invoice_no/send-sms', async (req, res) => {
 
     // Point SMS at the PDF endpoint — customer lands on PDF directly
     const receiptUrl = `${RECEIPT_BASE_URL}/api/receipts/${invoice_no}/pdf`;
-    const message = buildReceiptMessage({
+        const message = buildReceiptMessage({
       invoiceNo: invoice_no,
       amount: sale.total,
       receiptUrl,
+      customerName: sale.customer,
     });
 
     const result = await sendSms({

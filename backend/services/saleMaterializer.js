@@ -304,10 +304,11 @@ async function materializeSale(session) {
     const phone = session.customer_phone;
   if (phone) {
     const receiptUrl = `${RECEIPT_BASE_URL}/api/receipts/${invoiceNo}/pdf`;
-    const message = buildReceiptMessage({
+        const message = buildReceiptMessage({
       invoiceNo,
       amount: cart.total,
       receiptUrl,
+      customerName: cart.customer,
     });
     // Fire-and-forget — never block the sale response
     sendSms({ to: phone, message, refId: `auto-${invoiceNo}` })
