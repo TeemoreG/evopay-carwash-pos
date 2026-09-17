@@ -237,7 +237,7 @@ const xTotal = rightCol;
 
     if (logoEl) {
   try {
-    const logoWidth = usableWidth * 0.75;
+    const logoWidth = usableWidth * 0.5;
     const logoHeight = (logoEl.naturalHeight / logoEl.naturalWidth) * logoWidth;
     doc.addImage(logoEl, 'JPEG', (pageWidth - logoWidth) / 2, y, logoWidth, logoHeight, undefined, 'FAST');
     y += logoHeight + 2.5;

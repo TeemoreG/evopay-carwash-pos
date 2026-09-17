@@ -134,7 +134,7 @@ async function streamReceiptPdf(sale, publicBase, res) {
     const logoUrl = `${publicBase}/evopay-logo.jpg`;
     const buf = await fetchImageBuffer(logoUrl);
     if (buf) {
-      let logoW = contentW * 0.75;
+      let logoW = contentW * 0.5;
       let logoH;
       try {
         const dims = sizeOf(buf);
