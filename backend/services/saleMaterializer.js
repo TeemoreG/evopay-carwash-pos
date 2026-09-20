@@ -13,9 +13,10 @@ const round2 = (num) => Math.round((num || 0) * 100) / 100;
 
 const extractNumericInvoice = (invoiceNo) => {
   if (!invoiceNo) return 0;
-  const digits = String(invoiceNo).replace(/[^0-9]/g, '');
-  if (!digits) return 0;
-  return parseInt(digits.slice(-11), 10) || 0;
+  const parts = String(invoiceNo).split('-');
+  const last = parts[parts.length - 1];
+  const n = parseInt(last, 10);
+  return isNaN(n) ? 0 : n;
 };
 
 async function buildVscuPayload(sale, items) {
