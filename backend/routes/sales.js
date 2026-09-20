@@ -8,10 +8,15 @@ const round2 = (num) => Math.round((num || 0) * 100) / 100;
 
 const extractNumericInvoice = (invoiceNo) => {
   if (!invoiceNo) return 0;
-  const parts = String(invoiceNo).split('-');
-  const last = parts[parts.length - 1];
-  const n = parseInt(last, 10);
-  return isNaN(n) ? 0 : n;
+  const match = String(invoiceNo).match(/^CW-(\d{8})-(\d+)$/);
+  if (!match) {
+    const digits = String(invoiceNo).replace(/[^0-9]/g, '');
+    return parseInt(digits.slice(-10), 10) || 0;
+  }
+  const [, date, seq] = match;
+  const shortDate = date.slice(-5);
+  const shortSeq = seq.padStart(4, '0').slice(-4);
+  return parseInt(`${shortDate}${shortSeq}`, 10);
 };
 
 // ============================================

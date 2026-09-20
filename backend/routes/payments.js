@@ -61,21 +61,31 @@ function formatPhone(phone) {
 // ==================== NEXT INVOICE ====================
 router.get('/next-invoice', async (req, res) => {
   try {
-    const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const row = await db.getAsync(
-      `SELECT COUNT(*) as c FROM sales WHERE invoice_no LIKE ?`,
-      [`CW-${today}-%`]
+    // Ensure counter table exists
+    await db.runAsync(
+      `CREATE TABLE IF NOT EXISTS invoice_counter (id INTEGER PRIMARY KEY, last_no INTEGER DEFAULT 0)`
     );
-    const next = String((row?.c || 0) + 1).padStart(4, '0');
-    const invoice_no = `CW-${today}-${next}`;
-    console.log(`[NEXT-INVOICE] generated: ${invoice_no}`);
+    // Ensure the singleton row exists
+    await db.runAsync(
+      `INSERT OR IGNORE INTO invoice_counter (id, last_no) VALUES (1, 0)`
+    );
+    // Atomically increment
+    await db.runAsync(
+      `UPDATE invoice_counter SET last_no = last_no + 1 WHERE id = 1`
+    );
+    const row = await db.getAsync(
+      `SELECT last_no FROM invoice_counter WHERE id = 1`
+    );
+    const seq = String(row?.last_no || 1).padStart(4, '0');
+    const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const invoice_no = `CW-${today}-${seq}`;
+    console.log(`[NEXT-INVOICE] generated: ${invoice_no} (counter=${row?.last_no})`);
     res.json({ invoice_no });
   } catch (err) {
     console.error('[NEXT-INVOICE] error:', err.message);
     res.status(500).json({ error: 'Failed to generate invoice number', details: err.message });
   }
 });
-
 // ==================== CREATE PAYMENT SESSION ====================
 router.post('/qr/generate', async (req, res) => {
   const t0 = Date.now();
