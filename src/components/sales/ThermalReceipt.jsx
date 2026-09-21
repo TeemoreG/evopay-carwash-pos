@@ -281,7 +281,6 @@ export const generateThermalReceipt = async (saleData, logoRef = null, paperWidt
     doc.setDrawColor(...blue).setLineWidth(0.4).line(margin, y, pageWidth - margin, y);
     y += 5;
 
-    // Meta rows — non-bold, muted
     doc.setFont('courier', 'normal').setFontSize(bodyFont).setTextColor(85, 85, 85);
     const paymentLabel = getPaymentLabel(saleData);
     const dateStr = formatDateTime(saleData.created_at || saleData.date || new Date().toISOString());
@@ -303,7 +302,6 @@ export const generateThermalReceipt = async (saleData, logoRef = null, paperWidt
     y += 5;
 
     if (items.length) {
-      // Items header — BOLD
       doc.setFont('courier', 'bold').setFontSize(itemFont).setTextColor(...blue);
       doc.text('ITEM', xItem, y);
       doc.text('QTY', xQty, y, { align: 'right' });
@@ -348,7 +346,7 @@ export const generateThermalReceipt = async (saleData, logoRef = null, paperWidt
       doc.setDrawColor(...blue).setLineWidth(0.4).line(margin, y, pageWidth - margin, y);
       y += 5;
 
-            // SCU Information — stacked layout for long values
+      // SCU Information — stacked layout for long values
       if (signed) {
         doc.setFont('courier', 'bold').setFontSize(scuFont).setTextColor(...black);
         doc.text('SCU Information', leftCol, y);
@@ -375,7 +373,6 @@ export const generateThermalReceipt = async (saleData, logoRef = null, paperWidt
         y += 5;
       }
 
-      // Status — BOLD
       doc.setFont('courier', 'bold').setFontSize(bodyFont + 0.5);
       if (signed) {
         doc.setTextColor(0, 110, 0);
@@ -465,6 +462,22 @@ const ThermalReceipt = ({ sale, onClose, onDownload, onPrint }) => {
     return n === 80 ? 80 : 58;
   };
 
+  const downloadPdf = async () => {
+    const doc = await generateThermalReceipt(sale, logoRef, getPaperWidthMM());
+    if (!doc) throw new Error('PDF generation failed');
+    const blob = doc.output('blob');
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `receipt-${sale.invoice_no || sale.id || Date.now()}.pdf`;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  };
+
+  // Native Android — Telpo printer (unchanged)
   const handleNativePrint = async () => {
     setPrinting(true);
     try {
@@ -480,41 +493,24 @@ const ThermalReceipt = ({ sale, onClose, onDownload, onPrint }) => {
     }
   };
 
+  // Web — download PDF (identical output to Sales History Download button)
   const handleWebPrint = async () => {
-  setPrinting(true);
-  try {
-    if (printerCfg.mode && printerCfg.mode !== 'browser') {
-      try {
-        await printReceipt(sale, printerCfg);
-        toast.success('Receipt sent to printer');
-        if (onPrint) onPrint();
-        return;
-      } catch (nativeErr) {
-        console.warn('Configured printer failed, falling back to PDF:', nativeErr);
-        toast.info('Printer unavailable — opening PDF');
-      }
+    setPrinting(true);
+    try {
+      await downloadPdf();
+      toast.success('Receipt saved — open to print');
+      if (onPrint) onPrint();
+    } catch (e) {
+      console.error(e);
+      toast.error('Print failed: ' + (e.message || 'Unknown'));
+    } finally {
+      setPrinting(false);
     }
-
-    const doc = await generateThermalReceipt(sale, logoRef, getPaperWidthMM());
-    if (!doc) throw new Error('PDF generation failed');
-
-    // Download instead of window.print() — user opens in PDF viewer at correct size
-    doc.save(`receipt-${sale.invoice_no || Date.now()}.pdf`);
-    toast.success('Receipt saved — open the file to print');
-    if (onPrint) onPrint();
-  } catch (e) {
-    console.error(e);
-    toast.error('Print failed: ' + (e.message || 'Unknown'));
-  } finally {
-    setPrinting(false);
-  }
-};
+  };
 
   const handleDownload = async () => {
     try {
-      const doc = await generateThermalReceipt(sale, logoRef, getPaperWidthMM());
-      if (!doc) return toast.error('Failed to generate receipt');
-      doc.save(`receipt-${sale.invoice_no || Date.now()}.pdf`);
+      await downloadPdf();
       if (onDownload) onDownload();
       toast.success('Downloaded');
     } catch (e) {
@@ -611,7 +607,7 @@ const ThermalReceipt = ({ sale, onClose, onDownload, onPrint }) => {
                 </div>
               </div>
 
-                            {signed && (
+              {signed && (
                 <>
                   <hr className="border-gray-300 my-3" />
                   <div className="text-[10px] leading-relaxed text-black space-y-2">
@@ -679,7 +675,7 @@ const ThermalReceipt = ({ sale, onClose, onDownload, onPrint }) => {
                 <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.418 0V4h-5m5.582 0A9 9 0 1112 3" />
                 </svg>
-                Printing...
+                Saving...
               </>
             ) : (
               <>
