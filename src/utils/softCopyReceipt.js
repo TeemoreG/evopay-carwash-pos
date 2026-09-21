@@ -245,7 +245,7 @@ export const generateSoftCopyReceipt = async (sale) => {
   // ---- Status ----
   if (signed) {
     doc.setFont('helvetica', 'bold').setFontSize(8).setTextColor(...GREEN);
-    doc.text('KRA eTIMS VERIFIED', pageW / 2, y, { align: 'center' });
+    doc.text('FISCAL RECEIPT', pageW / 2, y, { align: 'center' });
   } else {
     doc.setFont('helvetica', 'bold').setFontSize(8).setTextColor(...AMBER);
     doc.text('NON-FISCAL RECEIPT', pageW / 2, y, { align: 'center' });
