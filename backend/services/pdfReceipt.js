@@ -71,7 +71,7 @@ const solidLine = (doc, x1, x2, y, color = LIGHT, width = 0.4) => {
   doc.strokeColor(color).lineWidth(width).moveTo(x1, y).lineTo(x2, y).stroke();
 };
 
-// ---- Render pass. If measureOnly=true, returns final Y (height used). ----
+// ---- Render pass. Returns final Y (height used). If measureOnly, skips images. ----
 async function renderPass(sale, publicBase, doc, measureOnly) {
   const widthMM = 100;
   const marginMM = 8;
@@ -274,22 +274,25 @@ async function renderPass(sale, publicBase, doc, measureOnly) {
 async function streamReceiptPdf(sale, publicBase, res) {
   const widthMM = 100;
 
-  // ---- Pass 1: measure with tall page (won't be sent) ----
+  // ---- Pass 1: measure with tall dummy page ----
   const measureDoc = new PDFDocument({
     size: [mmToPt(widthMM), mmToPt(2000)],
     margin: mmToPt(8),
+    bufferPages: false,
   });
   measureDoc.on('data', () => {});
   const usedY = await renderPass(sale, publicBase, measureDoc, true);
   measureDoc.end();
 
-  // Final height = content end + bottom margin (8mm)
-  const pageHMM = Math.max(60, (usedY / 2.8346) + 8);
+  // Content height + bottom margin + safety tail (prevents page overflow)
+  const pageHMM = Math.max(60, (usedY / 2.8346) + 8 + 6);
 
-  // ---- Pass 2: real render ----
+  // ---- Pass 2: real render with exact height ----
   const doc = new PDFDocument({
     size: [mmToPt(widthMM), mmToPt(pageHMM)],
     margin: mmToPt(8),
+    bufferPages: false,
+    autoFirstPage: true,
     info: {
       Title: `Receipt ${sale.invoice_no}`,
       Author: 'Evopay Car Wash',
