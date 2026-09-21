@@ -227,7 +227,7 @@ export const generateThermalReceipt = async (saleData, logoRef = null, paperWidt
 
     const headerHeight = 80;
     const metaHeight = 24;
-    const scuHeight = signed ? 24 : 0;
+    const scuHeight = signed ? 34 : 0;
     const qrBlockHeight = qrCodeDataURL ? qrSize + 10 : 0;
     const footerHeight = 20;
     const itemsBlock = items.length ? itemsHeight + 46 : 15;
@@ -348,26 +348,29 @@ export const generateThermalReceipt = async (saleData, logoRef = null, paperWidt
       doc.setDrawColor(...blue).setLineWidth(0.4).line(margin, y, pageWidth - margin, y);
       y += 5;
 
-      // SCU Information — aligned two-column
+            // SCU Information — stacked layout for long values
       if (signed) {
         doc.setFont('courier', 'bold').setFontSize(scuFont).setTextColor(...black);
         doc.text('SCU Information', leftCol, y);
         y += scuLineH + 0.5;
 
-        // Column split: label at left, value at right — same baseline for both
         const scuRows = [
           ['CU Invoice No', getCuInvoiceNo(saleData)],
           ['Customer PIN', getPinValue(saleData)],
           ['Receipt Ref No', saleData.invoice_no || 'N/A'],
         ];
-        doc.setFont('courier', 'normal').setFontSize(scuFont).setTextColor(...black);
-        scuRows.forEach(([label, value]) => {
-          doc.text(label, leftCol, y);
-          doc.text(String(value), rightCol, y, { align: 'right' });
-          y += scuLineH;
-        });
-        y += 1.5;
 
+        scuRows.forEach(([label, value]) => {
+          doc.setFont('courier', 'normal').setFontSize(scuFont - 0.5).setTextColor(110, 110, 110);
+          doc.text(label, leftCol, y);
+          y += scuLineH - 0.5;
+
+          doc.setFont('courier', 'normal').setFontSize(scuFont).setTextColor(...black);
+          doc.text(String(value), leftCol, y);
+          y += scuLineH + 0.5;
+        });
+
+        y += 0.5;
         doc.setDrawColor(...blue).setLineWidth(0.3).line(margin, y, pageWidth - margin, y);
         y += 5;
       }
@@ -607,22 +610,25 @@ const ThermalReceipt = ({ sale, onClose, onDownload, onPrint }) => {
                 </div>
               </div>
 
-              {signed && (
+                            {signed && (
                 <>
                   <hr className="border-gray-300 my-3" />
-                  <div className="text-[10px] leading-relaxed text-black space-y-1">
-                    <div className="font-bold mb-1.5">SCU Information</div>
-                    <div className="flex justify-between gap-2">
-                      <span className="shrink-0">CU Invoice No</span>
-                      <span className="text-right break-all">{cuInvoiceNo}</span>
+                  <div className="text-[10px] leading-relaxed text-black space-y-2">
+                    <div className="font-bold mb-1">SCU Information</div>
+
+                    <div>
+                      <div className="text-gray-600 text-[9px]">CU Invoice No</div>
+                      <div className="break-all">{cuInvoiceNo}</div>
                     </div>
-                    <div className="flex justify-between gap-2">
-                      <span className="shrink-0">Customer PIN</span>
-                      <span className="text-right break-all">{pinValue}</span>
+
+                    <div>
+                      <div className="text-gray-600 text-[9px]">Customer PIN</div>
+                      <div className="break-all">{pinValue}</div>
                     </div>
-                    <div className="flex justify-between gap-2">
-                      <span className="shrink-0">Receipt Ref No</span>
-                      <span className="text-right break-all">{sale.invoice_no || 'N/A'}</span>
+
+                    <div>
+                      <div className="text-gray-600 text-[9px]">Receipt Ref No</div>
+                      <div className="break-all">{sale.invoice_no || 'N/A'}</div>
                     </div>
                   </div>
                 </>
