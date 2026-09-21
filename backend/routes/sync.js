@@ -14,36 +14,29 @@ async function getPendingCount(page) {
   else if (page === 'purchases') endpointFilter = "AND endpoint = '/purchases/savePurchases'";
   else if (page === 'branches') endpointFilter = "AND endpoint IN ('/branches/saveBrancheCustomers', '/branches/saveBrancheUsers')";
   else if (page === 'compositions') endpointFilter = "AND endpoint = '/items/saveItemComposition'";
-  
+
   const result = await db.getAsync(
     `SELECT COUNT(*) as count FROM sync_queue WHERE status = 'pending' ${endpointFilter}`
   );
   return result?.count || 0;
 }
 
-// Helper: Check if item already exists in queue
-async function isItemInQueue(endpoint, identifier, value) {
-  let sql = '';
-  let params = [];
-
-  if (endpoint === '/items/saveItems') {
-    sql = `SELECT COUNT(*) as count FROM sync_queue WHERE endpoint = ? AND json_extract(payload, '$.itemCd') = ? AND status = 'pending'`;
-    params = [endpoint, value];
-  } else if (endpoint === '/trnsSales/saveSales') {
-    sql = `SELECT COUNT(*) as count FROM sync_queue WHERE endpoint = ? AND json_extract(payload, '$.invcNo') = ? AND status = 'pending'`;
-    params = [endpoint, parseInt(value)];
-  } else if (endpoint === '/purchases/savePurchases') {
-    sql = `SELECT COUNT(*) as count FROM sync_queue WHERE endpoint = ? AND json_extract(payload, '$.invcNo') = ? AND status = 'pending'`;
-    params = [endpoint, parseInt(value)];
-  } else if (endpoint === '/stock/saveStockItems') {
-    sql = `SELECT COUNT(*) as count FROM sync_queue WHERE endpoint = ? AND json_extract(payload, '$.sarNo') = ? AND status = 'pending'`;
-    params = [endpoint, parseInt(value)];
-  } else {
-    return false;
+// Helper: mark a sale as synced when its queue item succeeds
+async function markSaleAsSynced(saleId, response) {
+  if (!saleId) return;
+  try {
+    const signature = response?.data?.rcptSign || '';
+    const receiptNo = response?.data?.rcptNo || response?.data?.rcptInvcNo || '';
+    await db.runAsync(
+      `UPDATE sales SET status = 'Completed', synced = 1, synced_at = datetime('now'),
+                        vscu_signature = ?, receipt_no = ?
+       WHERE id = ?`,
+      [signature, receiptNo, saleId]
+    );
+    console.log(`[SYNC] marked saleId=${saleId} as synced rcptNo=${receiptNo}`);
+  } catch (e) {
+    console.error(`[SYNC] failed to mark saleId=${saleId} synced:`, e.message);
   }
-
-  const result = await db.getAsync(sql, params);
-  return result?.count > 0;
 }
 
 // Helper: Process sync queue
@@ -67,7 +60,6 @@ async function processSyncQueue() {
       let response = null;
       let success = false;
 
-      // Route to appropriate VSCU endpoint
       switch (item.endpoint) {
         case '/trnsSales/saveSales':
           response = await vscuClient.sendSale(payload);
@@ -108,6 +100,11 @@ async function processSyncQueue() {
       }
 
       if (success) {
+        // If this was a sale, update the corresponding sale row
+        if (item.endpoint === '/trnsSales/saveSales' && item.sale_id) {
+          await markSaleAsSynced(item.sale_id, response);
+        }
+
         await db.runAsync(`DELETE FROM sync_queue WHERE id = ?`, [item.id]);
         synced++;
         console.log(`✅ Synced item ${item.id} (${item.endpoint})`);
@@ -135,12 +132,11 @@ async function processSyncQueue() {
   return { synced, failed, errors };
 }
 
-// Process sync queue - send pending items to VSCU
+// Process sync queue
 router.post('/process', async (req, res) => {
   try {
-    // Check if VSCU is online first
     const isOnline = await vscuClient.checkStatus();
-    
+
     if (!isOnline || !isOnline.connected) {
       return res.json({
         success: false,
@@ -174,11 +170,11 @@ router.post('/process', async (req, res) => {
   }
 });
 
-// Get sync queue status - with page filter
+// Get sync queue status
 router.get('/status', async (req, res) => {
   try {
     const { page } = req.query;
-    
+
     let endpointFilter = '';
     if (page === 'items') endpointFilter = "AND endpoint = '/items/saveItems'";
     else if (page === 'stock') endpointFilter = "AND endpoint = '/stock/saveStockItems'";
@@ -187,24 +183,24 @@ router.get('/status', async (req, res) => {
     else if (page === 'purchases') endpointFilter = "AND endpoint = '/purchases/savePurchases'";
     else if (page === 'branches') endpointFilter = "AND endpoint IN ('/branches/saveBrancheCustomers', '/branches/saveBrancheUsers')";
     else if (page === 'compositions') endpointFilter = "AND endpoint = '/items/saveItemComposition'";
-    
+
     const pending = await db.getAsync(
       `SELECT COUNT(*) as count FROM sync_queue WHERE status = 'pending' ${endpointFilter}`
     );
-    
+
     const total = await db.getAsync(`SELECT COUNT(*) as count FROM sync_queue`);
-    
+
     const byEndpoint = await db.allAsync(
       `SELECT endpoint, COUNT(*) as count FROM sync_queue WHERE status = 'pending' ${endpointFilter} GROUP BY endpoint`
     );
-    
+
     const recentErrors = await db.allAsync(
       `SELECT id, endpoint, error, retry_count, created_at, last_attempt 
        FROM sync_queue 
        WHERE status = 'pending' AND retry_count > 0 ${endpointFilter}
        ORDER BY last_attempt DESC LIMIT 10`
     );
-    
+
     res.json({
       pending: pending?.count || 0,
       total: total?.count || 0,
@@ -221,7 +217,7 @@ router.get('/status', async (req, res) => {
 router.post('/retry/:id', async (req, res) => {
   try {
     const item = await db.getAsync(`SELECT * FROM sync_queue WHERE id = ?`, [req.params.id]);
-    
+
     if (!item) {
       return res.status(404).json({ error: 'Sync item not found' });
     }
@@ -265,6 +261,9 @@ router.post('/retry/:id', async (req, res) => {
     }
 
     if (success) {
+      if (item.endpoint === '/trnsSales/saveSales' && item.sale_id) {
+        await markSaleAsSynced(item.sale_id, response);
+      }
       await db.runAsync(`DELETE FROM sync_queue WHERE id = ?`, [item.id]);
       res.json({ success: true, synced: true });
     } else {
@@ -281,7 +280,7 @@ router.post('/retry/:id', async (req, res) => {
   }
 });
 
-// Clear failed sync items (with retry_count > 5)
+// Clear failed sync items
 router.delete('/clear', async (req, res) => {
   try {
     const result = await db.runAsync(
@@ -294,7 +293,7 @@ router.delete('/clear', async (req, res) => {
   }
 });
 
-// Clear all sync items (with confirmation)
+// Clear all
 router.delete('/clear-all', async (req, res) => {
   try {
     const result = await db.runAsync(`DELETE FROM sync_queue`);
@@ -305,14 +304,14 @@ router.delete('/clear-all', async (req, res) => {
   }
 });
 
-// Auto-sync endpoint - called by frontend periodically
+// Auto-sync endpoint
 router.post('/auto-sync', async (req, res) => {
   try {
     const pending = await getPendingCount();
-    
+
     if (pending === 0) {
-      return res.json({ 
-        success: true, 
+      return res.json({
+        success: true,
         message: 'No pending items to sync',
         pending: 0,
         synced: 0,
@@ -321,10 +320,10 @@ router.post('/auto-sync', async (req, res) => {
     }
 
     const isOnline = await vscuClient.checkStatus();
-    
+
     if (!isOnline || !isOnline.connected) {
-      return res.json({ 
-        success: false, 
+      return res.json({
+        success: false,
         message: 'VSCU is offline. Items will sync later.',
         pending,
         synced: 0,
@@ -334,7 +333,7 @@ router.post('/auto-sync', async (req, res) => {
 
     const result = await processSyncQueue();
     const remaining = await getPendingCount();
-    
+
     res.json({
       success: true,
       ...result,

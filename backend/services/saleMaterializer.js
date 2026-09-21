@@ -273,24 +273,24 @@ async function materializeSale(session) {
       } else {
         const errMsg = vscuResponse?.resultMsg || vscuResponse?.message || 'VSCU error';
         await db.runAsync(
-          `INSERT INTO sync_queue (endpoint, payload, error_reason, created_at) VALUES (?, ?, ?, ?)`,
-          ['/trnsSales/saveSales', JSON.stringify(vscuPayload), `VSCU: ${errMsg}`, now]
+          `INSERT INTO sync_queue (endpoint, payload, error_reason, created_at, sale_id) VALUES (?, ?, ?, ?, ?)`,
+          ['/trnsSales/saveSales', JSON.stringify(vscuPayload), `VSCU: ${errMsg}`, now, saleId]
         );
         queued = true;
         console.warn(`[MATERIALIZE][VSCU] rejected (${errMsg}) -> queued`);
       }
     } else {
       await db.runAsync(
-        `INSERT INTO sync_queue (endpoint, payload, error_reason, created_at) VALUES (?, ?, ?, ?)`,
-        ['/trnsSales/saveSales', JSON.stringify(vscuPayload), 'VSCU offline', now]
+        `INSERT INTO sync_queue (endpoint, payload, error_reason, created_at, sale_id) VALUES (?, ?, ?, ?, ?)`,
+        ['/trnsSales/saveSales', JSON.stringify(vscuPayload), 'VSCU offline', now, saleId]
       );
       queued = true;
       console.log(`[MATERIALIZE][VSCU] offline -> queued`);
     }
   } catch (err) {
     await db.runAsync(
-      `INSERT INTO sync_queue (endpoint, payload, error_reason, created_at) VALUES (?, ?, ?, ?)`,
-      ['/trnsSales/saveSales', JSON.stringify(vscuPayload), err.message || 'Network error', now]
+      `INSERT INTO sync_queue (endpoint, payload, error_reason, created_at, sale_id) VALUES (?, ?, ?, ?, ?)`,
+      ['/trnsSales/saveSales', JSON.stringify(vscuPayload), err.message || 'Network error', now, saleId]
     );
     queued = true;
     console.error('[MATERIALIZE][VSCU] exception -> queued:', err.message);
@@ -307,10 +307,10 @@ async function materializeSale(session) {
   // ============================================
   // AUTO-SEND RECEIPT SMS (if phone available)
   // ============================================
-    const phone = session.customer_phone;
+  const phone = session.customer_phone;
   if (phone) {
     const receiptUrl = `${RECEIPT_BASE_URL}/api/receipts/${invoiceNo}/pdf`;
-        const message = buildReceiptMessage({
+    const message = buildReceiptMessage({
       invoiceNo,
       amount: cart.total,
       receiptUrl,

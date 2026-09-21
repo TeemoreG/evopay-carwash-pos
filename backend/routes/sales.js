@@ -353,24 +353,24 @@ router.post('/', async (req, res) => {
         } else {
           const errorMsg = vscuResponse?.resultMsg || vscuResponse?.message || 'VSCU error';
           await db.runAsync(
-            `INSERT INTO sync_queue (endpoint, payload, error_reason, created_at) VALUES (?, ?, ?, ?)`,
-            ['/trnsSales/saveSales', JSON.stringify(vscuPayload), `VSCU: ${errorMsg}`, now]
+            `INSERT INTO sync_queue (endpoint, payload, error_reason, created_at, sale_id) VALUES (?, ?, ?, ?, ?)`,
+            ['/trnsSales/saveSales', JSON.stringify(vscuPayload), `VSCU: ${errorMsg}`, now, saleId]
           );
           queued = true;
           console.warn(`[SALE][VSCU] VSCU rejected → queued. reason=${errorMsg}`);
         }
       } else {
         await db.runAsync(
-          `INSERT INTO sync_queue (endpoint, payload, error_reason, created_at) VALUES (?, ?, ?, ?)`,
-          ['/trnsSales/saveSales', JSON.stringify(vscuPayload), 'VSCU offline', now]
+          `INSERT INTO sync_queue (endpoint, payload, error_reason, created_at, sale_id) VALUES (?, ?, ?, ?, ?)`,
+          ['/trnsSales/saveSales', JSON.stringify(vscuPayload), 'VSCU offline', now, saleId]
         );
         queued = true;
         console.warn('[SALE][VSCU] VSCU offline → queued');
       }
     } catch (vscuError) {
       await db.runAsync(
-        `INSERT INTO sync_queue (endpoint, payload, error_reason, created_at) VALUES (?, ?, ?, ?)`,
-        ['/trnsSales/saveSales', JSON.stringify(vscuPayload), vscuError.message || 'Network error', now]
+        `INSERT INTO sync_queue (endpoint, payload, error_reason, created_at, sale_id) VALUES (?, ?, ?, ?, ?)`,
+        ['/trnsSales/saveSales', JSON.stringify(vscuPayload), vscuError.message || 'Network error', now, saleId]
       );
       queued = true;
       console.error('[SALE][VSCU] exception → queued:', vscuError.message);
