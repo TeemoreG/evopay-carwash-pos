@@ -35,10 +35,6 @@ const Sales = () => {
   const [qrLoading, setQrLoading] = useState(false);
   const [smsPhone, setSmsPhone] = useState('');
   const [smsSending, setSmsSending] = useState(false);
-  // NEW: SMS prompt for cash sales
-  const [showSmsPrompt, setShowSmsPrompt] = useState(false);
-  const [promptPhone, setPromptPhone] = useState('');
-  const [promptSending, setPromptSending] = useState(false);
   const [now, setNow] = useState(new Date());
   const [mobileTab, setMobileTab] = useState('services');
   const navigate = useNavigate();
@@ -175,12 +171,10 @@ const Sales = () => {
       const saved = res?.data?.sale || payload;
       setCurrentSale({ ...saved, ...payload, vscu_signature: res?.data?.signature });
       setSmsPhone('');
-      setPromptPhone('');
       resetCart();
       fetchData();
       toast.success('Sale completed');
-      // NEW: show SMS prompt instead of directly opening the receipt
-      setShowSmsPrompt(true);
+      setShowReceipt(true);
     } catch (e) {
       console.error(e);
       toast.error('Failed to save sale');
@@ -330,41 +324,6 @@ const Sales = () => {
     } finally {
       setSmsSending(false);
     }
-  };
-
-  // ==================== SMS PROMPT HANDLERS (cash sale) ====================
-  const promptDigits = (promptPhone || '').replace(/\D/g, '');
-  const promptValid = promptDigits.length === 10 && /^0[17]/.test(promptDigits);
-
-  const handlePromptSend = async () => {
-    if (!currentSale?.invoice_no) {
-      setShowSmsPrompt(false);
-      setShowReceipt(true);
-      return;
-    }
-    if (!promptValid) {
-      toast.error('Enter a valid phone (07XX or 01XX)');
-      return;
-    }
-    setPromptSending(true);
-    try {
-      await sendReceiptSms(currentSale.invoice_no, promptDigits);
-      toast.success('Receipt SMS sent');
-    } catch (e) {
-      const msg = e?.response?.data?.error || 'Failed to send SMS';
-      toast.error(msg);
-    } finally {
-      setPromptSending(false);
-      setShowSmsPrompt(false);
-      setShowReceipt(true);
-      setPromptPhone('');
-    }
-  };
-
-  const handlePromptSkip = () => {
-    setShowSmsPrompt(false);
-    setShowReceipt(true);
-    setPromptPhone('');
   };
 
   const total = lines.reduce((s, l) => s + l.price * l.qty, 0);
@@ -563,60 +522,6 @@ const Sales = () => {
           onStkPush={handleSTK}
           onPoll={handlePoll}
         />
-      )}
-
-      {/* SMS PROMPT — cash sale only */}
-      {showSmsPrompt && currentSale && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-5">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
-                </svg>
-              </div>
-              <div>
-                <p className="text-sm font-bold text-[#1a2a4a] leading-tight">Sale Complete</p>
-                <p className="text-xs text-slate-500">
-                  KES {Number(currentSale.total || 0).toLocaleString()}
-                </p>
-              </div>
-            </div>
-
-            <p className="text-xs font-semibold text-slate-600 mb-2">Send receipt via SMS?</p>
-
-            <input
-              type="tel"
-              inputMode="numeric"
-              value={promptPhone}
-              onChange={(e) => setPromptPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-              placeholder="07XX XXX XXX"
-              autoFocus
-              className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#f47b20] mb-2"
-            />
-
-            {promptDigits.length > 0 && !promptValid && (
-              <p className="text-[10px] text-rose-500 mb-2">Enter a valid phone (07XX or 01XX)</p>
-            )}
-
-            <div className="flex gap-2 mt-3">
-              <button
-                onClick={handlePromptSkip}
-                disabled={promptSending}
-                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-semibold disabled:opacity-50"
-              >
-                Skip
-              </button>
-              <button
-                onClick={handlePromptSend}
-                disabled={promptSending || !promptValid}
-                className="flex-1 py-2.5 bg-[#f47b20] hover:bg-[#e06d1a] text-white rounded-lg text-sm font-semibold disabled:opacity-50"
-              >
-                {promptSending ? 'Sending...' : 'Send SMS'}
-              </button>
-            </div>
-          </div>
-        </div>
       )}
 
       {showReceipt && currentSale && (

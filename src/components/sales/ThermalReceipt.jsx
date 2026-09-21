@@ -3,7 +3,6 @@ import jsPDF from 'jspdf';
 import QRCode from 'qrcode';
 import { toast } from 'react-toastify';
 import { registerPlugin, Capacitor } from '@capacitor/core';
-import { printReceipt, getCachedConfig, fetchPrinterConfig } from '../../utils/printer';
 
 const NativePrinter = registerPlugin('TelpoPrinter');
 const isNative = Capacitor.isNativePlatform();
@@ -117,7 +116,7 @@ const getPinValue = (sale) => {
     : 'N/A';
 };
 
-// Native plain-text receipt
+// Native plain-text receipt (Android Telpo)
 const buildPlainTextReceipt = (sale) => {
   const line = '-'.repeat(32);
   const eq = '='.repeat(32);
@@ -346,7 +345,6 @@ export const generateThermalReceipt = async (saleData, logoRef = null, paperWidt
       doc.setDrawColor(...blue).setLineWidth(0.4).line(margin, y, pageWidth - margin, y);
       y += 5;
 
-      // SCU Information — stacked layout for long values
       if (signed) {
         doc.setFont('courier', 'bold').setFontSize(scuFont).setTextColor(...black);
         doc.text('SCU Information', leftCol, y);
@@ -429,279 +427,225 @@ export const generateThermalReceipt = async (saleData, logoRef = null, paperWidt
 };
 
 // ---------- Component ----------
-const ThermalReceipt = ({ sale, onClose, onDownload, onPrint }) => {
+const ThermalReceipt = ({
+  sale,
+  onClose,
+  onDownload,
+  onSendSms,
+  smsSending,
+  smsPhone,
+  setSmsPhone,
+}) => {
   const logoRef = useRef(null);
-  const [qrCodeData, setQrCodeData] = useState(null);
-  const [printing, setPrinting] = useState(false);
-  const [printerCfg, setPrinterCfg] = useState(getCachedConfig());
+  const [downloading, setDownloading] = useState(false);
+  const [nativePrinting, setNativePrinting] = useState(false);
 
   const signed = isSigned(sale);
-  const cuInvoiceNo = getCuInvoiceNo(sale);
-  const pinValue = getPinValue(sale);
-
-  useEffect(() => {
-    if (sale) {
-      generateQRCodeDataURL(sale).then(setQrCodeData);
-    }
-  }, [sale]);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchPrinterConfig().then((cfg) => {
-      if (!cancelled) setPrinterCfg(cfg);
-    });
-    return () => { cancelled = true; };
-  }, []);
-
   const paymentLabel = getPaymentLabel(sale);
-  const kraPin = import.meta.env.VITE_VSCU_TIN || '';
+  const invoiceNo = sale?.invoice_no || sale?.id || 'N/A';
+  const createdAt = sale?.created_at || sale?.date;
 
-  const getPaperWidthMM = () => {
-    const raw = printerCfg?.width ?? printerCfg?.paperWidth ?? 58;
-    const n = parseInt(String(raw).replace(/[^\d]/g, ''), 10);
-    return n === 80 ? 80 : 58;
+  // Close on Escape
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  // Web download (same as Sales History button)
+  const handleDownload = async () => {
+    setDownloading(true);
+    try {
+      const doc = await generateThermalReceipt(sale, logoRef, 58);
+      if (!doc) throw new Error('PDF generation failed');
+      const blob = doc.output('blob');
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `receipt-${sale.invoice_no || sale.id || Date.now()}.pdf`;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      toast.success('Receipt downloaded');
+      if (onDownload) onDownload();
+    } catch (e) {
+      console.error(e);
+      toast.error('Download failed');
+    } finally {
+      setDownloading(false);
+    }
   };
 
-  const downloadPdf = async () => {
-    const doc = await generateThermalReceipt(sale, logoRef, getPaperWidthMM());
-    if (!doc) throw new Error('PDF generation failed');
-    const blob = doc.output('blob');
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `receipt-${sale.invoice_no || sale.id || Date.now()}.pdf`;
-    a.style.display = 'none';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
-  };
-
-  // Native Android — Telpo printer (unchanged)
+  // Native Android (Telpo) — text print
   const handleNativePrint = async () => {
-    setPrinting(true);
+    setNativePrinting(true);
     try {
       const text = buildPlainTextReceipt(sale);
       await NativePrinter.printText({ text });
       toast.success('Receipt printed');
-      if (onPrint) onPrint();
     } catch (err) {
       console.error('Print failed:', err);
       toast.error('Print failed: ' + (err.message || 'Unknown error'));
     } finally {
-      setPrinting(false);
+      setNativePrinting(false);
     }
   };
 
-  // Web — download PDF (identical output to Sales History Download button)
-  const handleWebPrint = async () => {
-    setPrinting(true);
-    try {
-      await downloadPdf();
-      toast.success('Receipt saved — open to print');
-      if (onPrint) onPrint();
-    } catch (e) {
-      console.error(e);
-      toast.error('Print failed: ' + (e.message || 'Unknown'));
-    } finally {
-      setPrinting(false);
-    }
-  };
-
-  const handleDownload = async () => {
-    try {
-      await downloadPdf();
-      if (onDownload) onDownload();
-      toast.success('Downloaded');
-    } catch (e) {
-      console.error(e);
-      toast.error('Download failed');
-    }
-  };
+  const smsDigits = (smsPhone || '').replace(/\D/g, '');
+  const smsValid = smsDigits.length === 10 && /^0[17]/.test(smsDigits);
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-3 sm:p-4">
-      <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[95vh] flex flex-col">
-        <div className="flex justify-between items-center p-4 border-b border-gray-200">
-          <h2 className="text-lg sm:text-xl font-bold text-[#1a2a4a]">Receipt</h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700 p-1">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+      <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[95vh] flex flex-col">
+        {/* Header */}
+        <div className="flex justify-between items-center p-4 border-b border-slate-200">
+          <div>
+            <h2 className="text-base font-bold text-[#1a2a4a]">{invoiceNo}</h2>
+            <p className="text-xs text-slate-400">
+              {createdAt ? new Date(createdAt).toLocaleString('en-KE') : 'N/A'}
+            </p>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 p-1">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 bg-gray-100">
-          <div className="max-w-[80mm] mx-auto bg-white shadow-lg">
-            <div className="p-4 font-mono text-[11px]">
-              <div className="flex justify-center mb-3">
-                <img
-                  ref={logoRef}
-                  src="/evopay-logo.jpg"
-                  alt="Evopay Logo"
-                  className="h-14 object-contain"
-                  onError={(e) => (e.target.style.display = 'none')}
-                />
-              </div>
-
-              <div className="text-center font-bold text-[#1a2a4a] text-sm">
-                CAR WASH
-              </div>
-              <div className="text-center text-black text-xs mt-1">
-                eTIMS Compliant Receipt
-              </div>
-              {kraPin && (
-                <div className="text-center text-gray-600 text-[10px] mt-1">
-                  KRA PIN: {kraPin}
-                </div>
-              )}
-              <hr className="border-[#1a2a4a] my-3" />
-
-              <div className="text-[11px] leading-relaxed text-gray-700 space-y-0.5">
-                <div className="flex justify-between"><span>Invoice</span><span>{sale.invoice_no || 'N/A'}</span></div>
-                <div className="flex justify-between"><span>Cashier</span><span>{sale.user_name || sale.cashier || 'Unknown'}</span></div>
-                <div className="flex justify-between"><span>Customer</span><span>{sale.customer || 'Walk-in'}</span></div>
-                <div className="flex justify-between"><span>Date</span><span>{formatDateTime(sale.created_at || sale.date || new Date().toISOString())}</span></div>
-                <div className="flex justify-between"><span>Payment</span><span>{paymentLabel}</span></div>
-              </div>
-
-              <hr className="border-[#1a2a4a] my-3" />
-
-              <div className="flex font-bold text-[#1a2a4a] text-[10px]">
-                <div className="flex-1">ITEM</div>
-                <div className="w-8 text-right">QTY</div>
-                <div className="w-16 text-right">TOTAL</div>
-              </div>
-              <hr className="border-[#1a2a4a] my-1.5" />
-
-              <div className="text-[10px] leading-relaxed text-black space-y-1">
-                {(sale.items || []).map((item, idx) => {
-                  const qty = item.quantity || 0;
-                  const price = item.price || 0;
-                  const amount = item.total || qty * price;
-                  const name = item.item_name || item.name || 'Unknown';
-                  return (
-                    <div key={idx} className="flex gap-1 items-start">
-                      <div className="flex-1 break-words">{name}</div>
-                      <div className="w-8 text-right shrink-0">{qty}</div>
-                      <div className="w-16 text-right shrink-0">{amount.toFixed(0)}</div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <hr className="border-[#1a2a4a] my-3" />
-
-              <div className="text-[11px] leading-relaxed space-y-0.5">
-                <div className="flex justify-between text-gray-700">
-                  <span>Subtotal</span>
-                  <span className="text-black">KES {(sale.subtotal || 0).toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-gray-700">
-                  <span>VAT (16%)</span>
-                  <span className="text-black">KES {(sale.tax || 0).toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between font-bold text-black text-sm mt-2">
-                  <span>TOTAL</span>
-                  <span>KES {(sale.total || 0).toFixed(2)}</span>
-                </div>
-              </div>
-
-              {signed && (
-                <>
-                  <hr className="border-gray-300 my-3" />
-                  <div className="text-[10px] leading-relaxed text-black space-y-2">
-                    <div className="font-bold mb-1">SCU Information</div>
-
-                    <div>
-                      <div className="text-gray-600 text-[9px]">CU Invoice No</div>
-                      <div className="break-all">{cuInvoiceNo}</div>
-                    </div>
-
-                    <div>
-                      <div className="text-gray-600 text-[9px]">Customer PIN</div>
-                      <div className="break-all">{pinValue}</div>
-                    </div>
-
-                    <div>
-                      <div className="text-gray-600 text-[9px]">Receipt Ref No</div>
-                      <div className="break-all">{sale.invoice_no || 'N/A'}</div>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              <hr className="border-[#1a2a4a] my-3" />
-
-              <div className="text-center text-[11px] font-bold">
-                {signed
-                  ? <div className="text-green-700">FISCAL RECEIPT</div>
-                  : (
-                    <>
-                      <div className="text-amber-600">NON-FISCAL RECEIPT</div>
-                      <div className="text-[9px] text-gray-500 font-normal mt-1">Pending eTIMS sync</div>
-                    </>
-                  )}
-              </div>
-
-              {qrCodeData && (
-                <div className="text-center my-3">
-                  <img src={qrCodeData} alt="Receipt QR" className="mx-auto" style={{ width: '100px', height: '100px' }} />
-                  <div className="text-[8px] text-gray-700 mt-1.5">
-                    {signed ? 'Scan to verify on KRA' : 'Scan to view receipt'}
-                  </div>
-                </div>
-              )}
-
-              <hr className="border-gray-300 my-3" />
-              <div className="text-center text-[#1a2a4a] text-[11px] font-bold">
-                Thank you for your business!
-              </div>
-              <div className="text-center text-gray-500 text-[8px] mt-1">
-                Evopay Car Wash | KRA eTIMS VSCU v2.0.21
-              </div>
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {/* Tiles */}
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="p-2 bg-slate-50 rounded-lg">
+              <p className="text-slate-400 text-[10px] uppercase">Customer</p>
+              <p className="font-semibold text-slate-700 truncate">{sale.customer || 'Walk-in'}</p>
+            </div>
+            <div className="p-2 bg-slate-50 rounded-lg">
+              <p className="text-slate-400 text-[10px] uppercase">Cashier</p>
+              <p className="font-semibold text-slate-700 truncate">{sale.user_name || sale.cashier || '—'}</p>
+            </div>
+            <div className="p-2 bg-slate-50 rounded-lg">
+              <p className="text-slate-400 text-[10px] uppercase">Payment</p>
+              <p className="font-semibold text-slate-700">{paymentLabel}</p>
+            </div>
+            <div className="p-2 bg-slate-50 rounded-lg">
+              <p className="text-slate-400 text-[10px] uppercase">Sync</p>
+              <p className={`font-semibold ${signed ? 'text-emerald-600' : 'text-amber-600'}`}>
+                {signed ? 'Synced' : 'Pending'}
+              </p>
             </div>
           </div>
+
+          {/* Items */}
+          <div className="border-t border-slate-200 pt-3">
+            <p className="text-[10px] uppercase tracking-wider text-slate-400 mb-2">Items</p>
+            <div className="space-y-1.5">
+              {(sale.items || []).map((it, i) => {
+                const qty = it.quantity || 0;
+                const price = Number(it.price || 0);
+                const lineTotal = Number(it.total || qty * price);
+                return (
+                  <div key={i} className="flex justify-between text-sm">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-slate-700 truncate">{it.item_name || it.name || 'Item'}</p>
+                      <p className="text-[10px] text-slate-400">{qty} × {price.toLocaleString()}</p>
+                    </div>
+                    <span className="font-semibold text-slate-800 ml-2">
+                      KES {lineTotal.toLocaleString()}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Totals */}
+          <div className="border-t border-slate-200 pt-3 space-y-1 text-sm">
+            <div className="flex justify-between">
+              <span className="text-slate-500">Subtotal</span>
+              <span>KES {Number(sale.subtotal || 0).toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500">VAT</span>
+              <span>KES {Number(sale.tax || 0).toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between font-bold text-[#1a2a4a] text-base pt-1">
+              <span>Total</span>
+              <span>KES {Number(sale.total || 0).toFixed(2)}</span>
+            </div>
+          </div>
+
+          {/* SCU Information */}
+          {signed && (
+            <div className="border-t border-slate-200 pt-3 space-y-1.5 text-xs">
+              <p className="text-[10px] uppercase tracking-wider text-slate-400">SCU Information</p>
+              <div className="flex justify-between gap-2">
+                <span className="text-slate-500 shrink-0">CU Invoice No</span>
+                <span className="font-mono text-slate-800 text-right break-all">{getCuInvoiceNo(sale)}</span>
+              </div>
+              <div className="flex justify-between gap-2">
+                <span className="text-slate-500 shrink-0">Customer PIN</span>
+                <span className="font-mono text-slate-800 text-right break-all">{getPinValue(sale)}</span>
+              </div>
+              <div className="flex justify-between gap-2">
+                <span className="text-slate-500 shrink-0">Receipt Ref No</span>
+                <span className="font-mono text-slate-800 text-right break-all">{sale.invoice_no || 'N/A'}</span>
+              </div>
+            </div>
+          )}
         </div>
 
-        <div className="p-3 sm:p-4 border-t border-gray-200 flex flex-col sm:flex-row gap-2 sm:justify-end">
-          <button
-            onClick={isNative ? handleNativePrint : handleWebPrint}
-            disabled={printing}
-            className="w-full sm:w-auto px-4 py-2.5 bg-[#f47b20] hover:bg-[#e06d1a] text-white rounded-lg font-semibold text-sm disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            {printing ? (
-              <>
-                <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.418 0V4h-5m5.582 0A9 9 0 1112 3" />
-                </svg>
-                Saving...
-              </>
-            ) : (
-              <>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                </svg>
-                {isNative ? 'Print Receipt' : 'Print'}
-              </>
-            )}
-          </button>
-
-          {!isNative && (
-            <button
-              onClick={handleDownload}
-              className="w-full sm:w-auto px-4 py-2.5 bg-[#1a2a4a] hover:bg-[#2a3a5a] text-white rounded-lg font-semibold text-sm"
-            >
-              Download PDF
-            </button>
+        {/* Footer */}
+        <div className="p-4 border-t border-slate-200 space-y-3">
+          {/* SMS */}
+          {onSendSms && (
+            <div className="flex gap-2">
+              <input
+                type="tel"
+                inputMode="numeric"
+                value={smsPhone || ''}
+                onChange={(e) => setSmsPhone && setSmsPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                placeholder="07XX XXX XXX"
+                className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#f47b20]"
+              />
+              <button
+                onClick={onSendSms}
+                disabled={smsSending || !smsValid}
+                className="px-4 py-2 bg-[#1a2a4a] hover:bg-[#0f1a33] text-white rounded-lg text-sm font-semibold disabled:opacity-50"
+              >
+                {smsSending ? '...' : 'Send SMS'}
+              </button>
+            </div>
           )}
 
-          <button
-            onClick={onClose}
-            className="w-full sm:w-auto px-4 py-2.5 bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 rounded-lg font-semibold text-sm"
-          >
-            Close
-          </button>
+          {/* Actions */}
+          <div className="flex gap-2">
+            {isNative ? (
+              <button
+                onClick={handleNativePrint}
+                disabled={nativePrinting}
+                className="flex-1 py-2.5 bg-[#f47b20] hover:bg-[#e06d1a] text-white rounded-lg text-sm font-semibold disabled:opacity-50"
+              >
+                {nativePrinting ? 'Printing...' : 'Print Receipt'}
+              </button>
+            ) : (
+              <button
+                onClick={handleDownload}
+                disabled={downloading}
+                className="flex-1 py-2.5 bg-[#f47b20] hover:bg-[#e06d1a] text-white rounded-lg text-sm font-semibold disabled:opacity-50"
+              >
+                {downloading ? 'Generating...' : 'Download Receipt'}
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-semibold"
+            >
+              Close
+            </button>
+          </div>
         </div>
       </div>
     </div>
