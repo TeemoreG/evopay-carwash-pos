@@ -5,17 +5,16 @@ const http = require('http');
 const sizeOf = require('image-size');
 
 const BLUE = '#000000';
-const ORANGE = '#E35904';
 const GREY = '#6e6e6e';
+const MUTED = '#555555';
 const LIGHT = '#CCCCCC';
 const GREEN = '#057a05';
 const AMBER = '#E35904';
 const BLACK = '#000000';
-const WHITE = '#ffffff';
 
-// Single font family across the whole receipt (Arial-equivalent)
-const FONT = 'Helvetica';
-const FONT_BOLD = 'Helvetica-Bold';
+// Times New Roman (pdfkit built-in equivalent)
+const FONT = 'Times-Roman';
+const FONT_BOLD = 'Times-Bold';
 
 const paymentLabel = (sale) => {
   const m = String(sale.payment_method || '').trim();
@@ -80,7 +79,6 @@ const fmtTime = (s) => {
 // mm -> points (1 mm = 2.8346 pt)
 const mmToPt = (mm) => mm * 2.8346;
 
-// Solid line helper
 const solidLine = (doc, x1, x2, y, color = LIGHT, width = 0.4) => {
   doc.strokeColor(color).lineWidth(width).moveTo(x1, y).lineTo(x2, y).stroke();
 };
@@ -96,7 +94,6 @@ async function streamReceiptPdf(sale, publicBase, res) {
   const tax = Number(sale.tax || 0);
   const total = Number(sale.total || 0);
 
-  // Estimate height in mm
   const itemRowsHeight = items.reduce((sum, it) => {
     const name = String(it.item_name || '');
     const lines = Math.max(1, Math.ceil(name.length / 34));
@@ -104,17 +101,17 @@ async function streamReceiptPdf(sale, publicBase, res) {
   }, 0);
 
   const pageHMM =
-    40          // logo + brand
-    + 14        // subheader + kra pin
-    + 8         // divider
-    + 24        // meta (5 rows)
-    + 8         // items header
+    40
+    + 14
+    + 8
+    + 24
+    + 8
     + itemRowsHeight
-    + 38        // totals
-    + 24        // scu block + customer pin
-    + 42        // qr
-    + 16        // status
-    + 20;       // footer
+    + 38
+    + 24
+    + 42
+    + 16
+    + 20;
 
   const doc = new PDFDocument({
     size: [mmToPt(widthMM), mmToPt(pageHMM)],
@@ -136,7 +133,7 @@ async function streamReceiptPdf(sale, publicBase, res) {
 
   let y = margin;
 
-  // ---- Logo (centered) ----
+  // ---- Logo ----
   try {
     const logoUrl = `${publicBase}/evopay-logo.jpg`;
     const buf = await fetchImageBuffer(logoUrl);
@@ -161,21 +158,20 @@ async function streamReceiptPdf(sale, publicBase, res) {
      .text('CAR WASH', margin, y, { width: contentW, align: 'center' });
   y += 20;
 
-  doc.font(FONT).fontSize(8).fillColor(GREY)
+  doc.font(FONT).fontSize(9).fillColor(GREY)
      .text('eTIMS Compliant Receipt', margin, y, { width: contentW, align: 'center' });
   y += 12;
 
   if (kraPin) {
-    doc.font(FONT).fontSize(7.5).fillColor(GREY)
+    doc.font(FONT).fontSize(8).fillColor(GREY)
        .text(`KRA PIN: ${kraPin}`, margin, y, { width: contentW, align: 'center' });
     y += 12;
   }
 
-  // Solid divider
   solidLine(doc, margin, rightX, y, BLUE, 0.7);
   y += 14;
 
-  // ---- Meta rows (all body, non-bold) ----
+  // ---- Meta rows — Times, non-bold, muted ----
   const metaRows = [
     ['Invoice', sale.invoice_no || 'N/A'],
     ['Cashier', sale.cashier || 'Unknown'],
@@ -184,9 +180,9 @@ async function streamReceiptPdf(sale, publicBase, res) {
     ['Payment', paymentLabel(sale)],
   ];
   metaRows.forEach(([k, v]) => {
-    doc.font(FONT).fontSize(8).fillColor(GREY)
+    doc.font(FONT).fontSize(9).fillColor(MUTED)
        .text(k, margin, y, { width: contentW * 0.4, lineBreak: false });
-    doc.font(FONT).fillColor(BLACK)
+    doc.font(FONT).fontSize(9).fillColor(MUTED)
        .text(String(v), margin, y, { width: contentW, align: 'right' });
     y += 12;
   });
@@ -197,7 +193,7 @@ async function streamReceiptPdf(sale, publicBase, res) {
   const colQtyX = margin + contentW * 0.60;
   const colTotalX = rightX;
 
-  doc.font(FONT_BOLD).fontSize(7.5).fillColor(BLUE);
+  doc.font(FONT_BOLD).fontSize(8).fillColor(BLUE);
   doc.text('ITEM', margin + 6, y + 4);
   doc.text('QTY', colQtyX, y + 4, { width: 30, align: 'right' });
   doc.text('TOTAL', colTotalX - 60, y + 4, { width: 60, align: 'right' });
@@ -205,7 +201,7 @@ async function streamReceiptPdf(sale, publicBase, res) {
   solidLine(doc, margin, rightX, y, LIGHT, 0.5);
   y += 6;
 
-  // ---- Item rows (no grey underlay) ----
+  // ---- Item rows ----
   items.forEach((it) => {
     const name = it.item_name || it.name || 'Unknown';
     const qty = Number(it.quantity || 0);
@@ -213,10 +209,10 @@ async function streamReceiptPdf(sale, publicBase, res) {
     const amount = Number(it.total || qty * price);
 
     const nameW = colQtyX - (margin + 6) - 6;
-    const nameH = doc.font(FONT).fontSize(7.5).heightOfString(name, { width: nameW });
+    const nameH = doc.font(FONT).fontSize(9).heightOfString(name, { width: nameW });
     const thisRowH = Math.max(14, nameH + 4);
 
-    doc.font(FONT).fontSize(7.5).fillColor(BLACK);
+    doc.font(FONT).fontSize(9).fillColor(BLACK);
     doc.text(name, margin + 6, y + 3, { width: nameW });
     doc.text(String(qty), colQtyX, y + 3, { width: 30, align: 'right' });
     doc.text(amount.toFixed(2), colTotalX - 60, y + 3, { width: 60, align: 'right' });
@@ -229,7 +225,7 @@ async function streamReceiptPdf(sale, publicBase, res) {
   // ---- Totals ----
   const totLabelX = margin;
 
-  doc.font(FONT).fontSize(8).fillColor(GREY);
+  doc.font(FONT).fontSize(9).fillColor(GREY);
   doc.text('Subtotal', totLabelX, y);
   doc.fillColor(BLACK).text(`KES ${subtotal.toFixed(2)}`, totLabelX, y, { width: contentW, align: 'right' });
   y += 12;
@@ -241,12 +237,12 @@ async function streamReceiptPdf(sale, publicBase, res) {
   solidLine(doc, margin, rightX, y - 3, BLUE, 0.6);
   y += 6;
 
-  doc.font(FONT_BOLD).fontSize(12).fillColor(BLUE);
+  doc.font(FONT_BOLD).fontSize(13).fillColor(BLUE);
   doc.text('TOTAL', margin + 6, y);
   doc.text(`KES ${total.toFixed(2)}`, totLabelX, y, { width: contentW - 6, align: 'right' });
   y += 22;
 
-  // ---- SCU Information (signed receipts only) ----
+  // ---- SCU Information ----
   const pinValue = (sale.customer_pin && String(sale.customer_pin).trim() && sale.customer_pin !== 'N/A')
     ? String(sale.customer_pin).trim()
     : 'N/A';
@@ -258,19 +254,19 @@ async function streamReceiptPdf(sale, publicBase, res) {
     solidLine(doc, margin, rightX, y - 4, LIGHT, 0.4);
     y += 2;
 
-    doc.font(FONT_BOLD).fontSize(8.5).fillColor(BLUE)
+    doc.font(FONT_BOLD).fontSize(10).fillColor(BLUE)
        .text('SCU Information', margin, y, { width: contentW, align: 'left' });
+    y += 13;
+
+    doc.font(FONT).fontSize(8.5).fillColor(GREY)
+       .text('CU Invoice No', margin, y, { width: contentW * 0.4, lineBreak: false });
+    doc.font(FONT_BOLD).fontSize(8.5).fillColor(BLACK)
+       .text(cuInvoiceNo, margin, y, { width: contentW, align: 'right' });
     y += 12;
 
-    doc.font(FONT).fontSize(7.5).fillColor(GREY)
-       .text('CU Invoice No', margin, y, { width: contentW * 0.4, lineBreak: false });
-    doc.font(FONT_BOLD).fontSize(7.5).fillColor(BLACK)
-       .text(cuInvoiceNo, margin, y, { width: contentW, align: 'right' });
-    y += 11;
-
-    doc.font(FONT).fontSize(7.5).fillColor(GREY)
+    doc.font(FONT).fontSize(8.5).fillColor(GREY)
        .text('Customer PIN', margin, y, { width: contentW * 0.4, lineBreak: false });
-    doc.font(FONT).fontSize(7.5).fillColor(BLACK)
+    doc.font(FONT).fontSize(8.5).fillColor(BLACK)
        .text(pinValue, margin, y, { width: contentW, align: 'right' });
     y += 12;
   }
@@ -285,7 +281,7 @@ async function streamReceiptPdf(sale, publicBase, res) {
     doc.image(qrBuf, qrX, y, { width: qrSize, height: qrSize });
     y += qrSize + 4;
 
-    doc.font(FONT).fontSize(7).fillColor(GREY)
+    doc.font(FONT).fontSize(8).fillColor(GREY)
        .text(
          signed ? 'Scan to verify on KRA' : 'Scan to view receipt online',
          margin, y, { width: contentW, align: 'center' }
@@ -297,13 +293,13 @@ async function streamReceiptPdf(sale, publicBase, res) {
 
   // ---- Status ----
   if (signed) {
-    doc.font(FONT_BOLD).fontSize(9).fillColor(GREEN)
+    doc.font(FONT_BOLD).fontSize(10).fillColor(GREEN)
        .text('KRA eTIMS VERIFIED', margin, y, { width: contentW, align: 'center' });
   } else {
-    doc.font(FONT_BOLD).fontSize(9).fillColor(AMBER)
+    doc.font(FONT_BOLD).fontSize(10).fillColor(AMBER)
        .text('NON-FISCAL RECEIPT', margin, y, { width: contentW, align: 'center' });
     y += 12;
-    doc.font(FONT).fontSize(7).fillColor(GREY)
+    doc.font(FONT).fontSize(8).fillColor(GREY)
        .text('Pending eTIMS sync — not a KRA tax invoice.', margin, y, { width: contentW, align: 'center' });
   }
   y += 16;
@@ -312,11 +308,11 @@ async function streamReceiptPdf(sale, publicBase, res) {
   solidLine(doc, margin, rightX, y, LIGHT, 0.4);
   y += 10;
 
-  doc.font(FONT_BOLD).fontSize(9).fillColor(BLUE)
+  doc.font(FONT_BOLD).fontSize(10.5).fillColor(BLUE)
      .text('Thank you for your business!', margin, y, { width: contentW, align: 'center' });
   y += 12;
 
-  doc.font(FONT).fontSize(6.5).fillColor(GREY)
+  doc.font(FONT).fontSize(7.5).fillColor(GREY)
      .text('Evopay Car Wash  |  KRA eTIMS VSCU v2.0.21', margin, y, { width: contentW, align: 'center' });
 
   doc.end();
