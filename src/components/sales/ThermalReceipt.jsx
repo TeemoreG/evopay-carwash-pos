@@ -117,7 +117,7 @@ const getPinValue = (sale) => {
     : 'N/A';
 };
 
-// Native plain-text receipt (matches PDF content)
+// Native plain-text receipt
 const buildPlainTextReceipt = (sale) => {
   const line = '-'.repeat(32);
   const eq = '='.repeat(32);
@@ -203,33 +203,34 @@ export const generateThermalReceipt = async (saleData, logoRef = null, paperWidt
     const margin = 2.5;
     const bodyFont = isNarrow ? 9.5 : 10.5;
     const itemFont = isNarrow ? 8.5 : 9.5;
-    const titleFont = isNarrow ? 10 : 11;
     const brandFont = isNarrow ? 13 : 14;
     const totalFont = isNarrow ? 13 : 14;
     const footerFont = isNarrow ? 7.5 : 8;
+    const scuFont = isNarrow ? 8.5 : 9.5;
     const qrSize = isNarrow ? 24 : 28;
-    const lineH = 4.2;
-    const itemLineH = 3.8;
+    const lineH = 4.5;
+    const itemLineH = 4.0;
+    const scuLineH = 4.2;
 
     const usableWidth = paperWidthMM - margin * 2;
     const nameColWidth = usableWidth * 0.52;
 
     const tempDoc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [paperWidthMM, 300] });
-    tempDoc.setFont('courier', 'bold');
+    tempDoc.setFont('courier', 'normal');
     tempDoc.setFontSize(itemFont);
 
     let itemsHeight = 0;
     items.forEach((item) => {
       const splitName = tempDoc.splitTextToSize(item.item_name || item.name || 'Unknown', nameColWidth);
-      itemsHeight += splitName.length * itemLineH + 1.2;
+      itemsHeight += splitName.length * itemLineH + 1.5;
     });
 
-    const headerHeight = 78;
-    const metaHeight = 22;
-    const scuHeight = signed ? 20 : 0;
+    const headerHeight = 80;
+    const metaHeight = 24;
+    const scuHeight = signed ? 24 : 0;
     const qrBlockHeight = qrCodeDataURL ? qrSize + 10 : 0;
-    const footerHeight = 18;
-    const itemsBlock = items.length ? itemsHeight + 40 : 15;
+    const footerHeight = 20;
+    const itemsBlock = items.length ? itemsHeight + 46 : 15;
     const totalHeight = headerHeight + metaHeight + itemsBlock + scuHeight + qrBlockHeight + footerHeight;
 
     const doc = new jsPDF({
@@ -255,7 +256,7 @@ export const generateThermalReceipt = async (saleData, logoRef = null, paperWidt
         const logoWidth = usableWidth * 0.45;
         const logoHeight = (logoEl.naturalHeight / logoEl.naturalWidth) * logoWidth;
         doc.addImage(logoEl, 'JPEG', (pageWidth - logoWidth) / 2, y, logoWidth, logoHeight, undefined, 'FAST');
-        y += logoHeight - 1;
+        y += logoHeight + 1;
       } catch (e) {
         console.warn('logo addImage failed:', e);
       }
@@ -263,21 +264,22 @@ export const generateThermalReceipt = async (saleData, logoRef = null, paperWidt
 
     doc.setFont('courier', 'bold').setFontSize(brandFont).setTextColor(...blue);
     doc.text('CAR WASH', pageWidth / 2, y, { align: 'center' });
-    y += 5;
+    y += 5.5;
 
     doc.setFont('courier', 'normal').setFontSize(bodyFont).setTextColor(...black);
     doc.text('eTIMS Compliant Receipt', pageWidth / 2, y, { align: 'center' });
-    y += 4;
+    y += 4.5;
 
     const kraPin = import.meta.env.VITE_VSCU_TIN || '';
     if (kraPin) {
       doc.setFont('courier', 'normal').setFontSize(bodyFont - 0.5).setTextColor(110, 110, 110);
       doc.text(`KRA PIN: ${kraPin}`, pageWidth / 2, y, { align: 'center' });
-      y += 4;
+      y += 4.5;
     }
 
+    y += 1;
     doc.setDrawColor(...blue).setLineWidth(0.4).line(margin, y, pageWidth - margin, y);
-    y += 4;
+    y += 5;
 
     // Meta rows — non-bold, muted
     doc.setFont('courier', 'normal').setFontSize(bodyFont).setTextColor(85, 85, 85);
@@ -295,10 +297,10 @@ export const generateThermalReceipt = async (saleData, logoRef = null, paperWidt
       doc.text(String(v), rightCol, y, { align: 'right' });
       y += lineH;
     });
-    y += 1;
+    y += 1.5;
 
     doc.setDrawColor(...blue).line(margin, y, pageWidth - margin, y);
-    y += 4;
+    y += 5;
 
     if (items.length) {
       // Items header — BOLD
@@ -308,7 +310,7 @@ export const generateThermalReceipt = async (saleData, logoRef = null, paperWidt
       doc.text('TOTAL', xTotal, y, { align: 'right' });
       y += 4;
       doc.setDrawColor(...blue).setLineWidth(0.2).line(margin, y, pageWidth - margin, y);
-      y += 4;
+      y += 4.5;
 
       doc.setFont('courier', 'normal').setFontSize(itemFont).setTextColor(...black);
       items.forEach((item) => {
@@ -320,12 +322,12 @@ export const generateThermalReceipt = async (saleData, logoRef = null, paperWidt
         doc.text(lines, xItem, y);
         doc.text(`${qty}`, xQty, y, { align: 'right' });
         doc.text(`${amount.toFixed(0)}`, xTotal, y, { align: 'right' });
-        y += lines.length * itemLineH + 1.2;
+        y += lines.length * itemLineH + 1.5;
       });
 
-      y += 1;
+      y += 1.5;
       doc.setDrawColor(...blue).line(margin, y, pageWidth - margin, y);
-      y += 4;
+      y += 5;
 
       doc.setFont('courier', 'normal').setFontSize(bodyFont).setTextColor(110, 110, 110);
       doc.text('Subtotal', leftCol, y);
@@ -336,37 +338,38 @@ export const generateThermalReceipt = async (saleData, logoRef = null, paperWidt
       doc.text('VAT (16%)', leftCol, y);
       doc.setTextColor(...black);
       doc.text(`KES ${tax.toFixed(2)}`, rightCol, y, { align: 'right' });
-      y += lineH + 1;
+      y += lineH + 1.5;
 
       doc.setFont('courier', 'bold').setFontSize(totalFont).setTextColor(...black);
       doc.text('TOTAL', leftCol, y);
       doc.text(`KES ${total.toFixed(2)}`, rightCol, y, { align: 'right' });
-      y += 6;
+      y += 7;
 
       doc.setDrawColor(...blue).setLineWidth(0.4).line(margin, y, pageWidth - margin, y);
-      y += 4;
+      y += 5;
 
-      // SCU Information — black, non-bold labels, value plain
+      // SCU Information — aligned two-column
       if (signed) {
-        doc.setFont('courier', 'normal').setFontSize(bodyFont).setTextColor(...black);
+        doc.setFont('courier', 'bold').setFontSize(scuFont).setTextColor(...black);
         doc.text('SCU Information', leftCol, y);
-        y += lineH;
+        y += scuLineH + 0.5;
 
-        doc.setFont('courier', 'normal').setFontSize(bodyFont - 0.5).setTextColor(...black);
-        doc.text('CU Invoice No', leftCol, y);
-        doc.text(getCuInvoiceNo(saleData), rightCol, y, { align: 'right' });
-        y += lineH;
-
-        doc.text('Customer PIN', leftCol, y);
-        doc.text(getPinValue(saleData), rightCol, y, { align: 'right' });
-        y += lineH;
-
-        doc.text('Receipt Ref No', leftCol, y);
-        doc.text(saleData.invoice_no || 'N/A', rightCol, y, { align: 'right' });
-        y += lineH + 1;
+        // Column split: label at left, value at right — same baseline for both
+        const scuRows = [
+          ['CU Invoice No', getCuInvoiceNo(saleData)],
+          ['Customer PIN', getPinValue(saleData)],
+          ['Receipt Ref No', saleData.invoice_no || 'N/A'],
+        ];
+        doc.setFont('courier', 'normal').setFontSize(scuFont).setTextColor(...black);
+        scuRows.forEach(([label, value]) => {
+          doc.text(label, leftCol, y);
+          doc.text(String(value), rightCol, y, { align: 'right' });
+          y += scuLineH;
+        });
+        y += 1.5;
 
         doc.setDrawColor(...blue).setLineWidth(0.3).line(margin, y, pageWidth - margin, y);
-        y += 4;
+        y += 5;
       }
 
       // Status — BOLD
@@ -377,16 +380,16 @@ export const generateThermalReceipt = async (saleData, logoRef = null, paperWidt
       } else {
         doc.setTextColor(160, 100, 0);
         doc.text('NON-FISCAL RECEIPT', pageWidth / 2, y, { align: 'center' });
-        y += 4;
+        y += 4.5;
         doc.setFont('courier', 'normal').setFontSize(footerFont).setTextColor(110, 110, 110);
         doc.text('Pending eTIMS sync', pageWidth / 2, y, { align: 'center' });
       }
-      y += 6;
+      y += 7;
 
       if (qrCodeDataURL) {
         try {
           doc.addImage(qrCodeDataURL, 'PNG', (pageWidth - qrSize) / 2, y, qrSize, qrSize);
-          y += qrSize + 2;
+          y += qrSize + 3;
           doc.setFont('courier', 'normal').setFontSize(footerFont).setTextColor(110, 110, 110);
           doc.text(
             signed ? 'Scan to verify on KRA' : 'Scan to view receipt',
@@ -394,17 +397,17 @@ export const generateThermalReceipt = async (saleData, logoRef = null, paperWidt
             y,
             { align: 'center' }
           );
-          y += 4;
+          y += 4.5;
         } catch {}
       }
 
-      y += 1;
+      y += 2;
       doc.setDrawColor(200, 200, 200).setLineWidth(0.3).line(margin, y, pageWidth - margin, y);
-      y += 4;
+      y += 5;
 
       doc.setFont('courier', 'bold').setFontSize(bodyFont + 0.5).setTextColor(...blue);
       doc.text('Thank you for your business!', pageWidth / 2, y, { align: 'center' });
-      y += 4.5;
+      y += 5;
       doc.setFont('courier', 'normal').setFontSize(footerFont).setTextColor(120, 120, 120);
       doc.text(
         'Evopay Car Wash  |  KRA eTIMS VSCU v2.0.21',
@@ -531,7 +534,7 @@ const ThermalReceipt = ({ sale, onClose, onDownload, onPrint }) => {
         <div className="flex-1 overflow-y-auto p-4 bg-gray-100">
           <div className="max-w-[80mm] mx-auto bg-white shadow-lg">
             <div className="p-4 font-mono text-[11px]">
-              <div className="flex justify-center mb-2">
+              <div className="flex justify-center mb-3">
                 <img
                   ref={logoRef}
                   src="/evopay-logo.jpg"
@@ -552,9 +555,9 @@ const ThermalReceipt = ({ sale, onClose, onDownload, onPrint }) => {
                   KRA PIN: {kraPin}
                 </div>
               )}
-              <hr className="border-[#1a2a4a] my-2" />
+              <hr className="border-[#1a2a4a] my-3" />
 
-              <div className="text-[11px] leading-tight text-gray-700">
+              <div className="text-[11px] leading-relaxed text-gray-700 space-y-0.5">
                 <div className="flex justify-between"><span>Invoice</span><span>{sale.invoice_no || 'N/A'}</span></div>
                 <div className="flex justify-between"><span>Cashier</span><span>{sale.user_name || sale.cashier || 'Unknown'}</span></div>
                 <div className="flex justify-between"><span>Customer</span><span>{sale.customer || 'Walk-in'}</span></div>
@@ -562,23 +565,23 @@ const ThermalReceipt = ({ sale, onClose, onDownload, onPrint }) => {
                 <div className="flex justify-between"><span>Payment</span><span>{paymentLabel}</span></div>
               </div>
 
-              <hr className="border-[#1a2a4a] my-2" />
+              <hr className="border-[#1a2a4a] my-3" />
 
               <div className="flex font-bold text-[#1a2a4a] text-[10px]">
                 <div className="flex-1">ITEM</div>
                 <div className="w-8 text-right">QTY</div>
                 <div className="w-16 text-right">TOTAL</div>
               </div>
-              <hr className="border-[#1a2a4a] my-1" />
+              <hr className="border-[#1a2a4a] my-1.5" />
 
-              <div className="text-[10px] leading-tight text-black">
+              <div className="text-[10px] leading-relaxed text-black space-y-1">
                 {(sale.items || []).map((item, idx) => {
                   const qty = item.quantity || 0;
                   const price = item.price || 0;
                   const amount = item.total || qty * price;
                   const name = item.item_name || item.name || 'Unknown';
                   return (
-                    <div key={idx} className="flex gap-1 mb-1 items-start">
+                    <div key={idx} className="flex gap-1 items-start">
                       <div className="flex-1 break-words">{name}</div>
                       <div className="w-8 text-right shrink-0">{qty}</div>
                       <div className="w-16 text-right shrink-0">{amount.toFixed(0)}</div>
@@ -587,9 +590,9 @@ const ThermalReceipt = ({ sale, onClose, onDownload, onPrint }) => {
                 })}
               </div>
 
-              <hr className="border-[#1a2a4a] my-2" />
+              <hr className="border-[#1a2a4a] my-3" />
 
-              <div className="text-[11px] leading-tight">
+              <div className="text-[11px] leading-relaxed space-y-0.5">
                 <div className="flex justify-between text-gray-700">
                   <span>Subtotal</span>
                   <span className="text-black">KES {(sale.subtotal || 0).toFixed(2)}</span>
@@ -598,7 +601,7 @@ const ThermalReceipt = ({ sale, onClose, onDownload, onPrint }) => {
                   <span>VAT (16%)</span>
                   <span className="text-black">KES {(sale.tax || 0).toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between font-bold text-black text-sm mt-1">
+                <div className="flex justify-between font-bold text-black text-sm mt-2">
                   <span>TOTAL</span>
                   <span>KES {(sale.total || 0).toFixed(2)}</span>
                 </div>
@@ -606,26 +609,26 @@ const ThermalReceipt = ({ sale, onClose, onDownload, onPrint }) => {
 
               {signed && (
                 <>
-                  <hr className="border-gray-300 my-2" />
-                  <div className="text-[10px] leading-tight text-black">
-                    <div className="mb-1">SCU Information</div>
-                    <div className="flex justify-between">
-                      <span>CU Invoice No</span>
-                      <span>{cuInvoiceNo}</span>
+                  <hr className="border-gray-300 my-3" />
+                  <div className="text-[10px] leading-relaxed text-black space-y-1">
+                    <div className="font-bold mb-1.5">SCU Information</div>
+                    <div className="flex justify-between gap-2">
+                      <span className="shrink-0">CU Invoice No</span>
+                      <span className="text-right break-all">{cuInvoiceNo}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span>Customer PIN</span>
-                      <span>{pinValue}</span>
+                    <div className="flex justify-between gap-2">
+                      <span className="shrink-0">Customer PIN</span>
+                      <span className="text-right break-all">{pinValue}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span>Receipt Ref No</span>
-                      <span>{sale.invoice_no || 'N/A'}</span>
+                    <div className="flex justify-between gap-2">
+                      <span className="shrink-0">Receipt Ref No</span>
+                      <span className="text-right break-all">{sale.invoice_no || 'N/A'}</span>
                     </div>
                   </div>
                 </>
               )}
 
-              <hr className="border-[#1a2a4a] my-2" />
+              <hr className="border-[#1a2a4a] my-3" />
 
               <div className="text-center text-[11px] font-bold">
                 {signed
@@ -639,19 +642,19 @@ const ThermalReceipt = ({ sale, onClose, onDownload, onPrint }) => {
               </div>
 
               {qrCodeData && (
-                <div className="text-center my-2">
+                <div className="text-center my-3">
                   <img src={qrCodeData} alt="Receipt QR" className="mx-auto" style={{ width: '100px', height: '100px' }} />
-                  <div className="text-[8px] text-gray-700 mt-1">
+                  <div className="text-[8px] text-gray-700 mt-1.5">
                     {signed ? 'Scan to verify on KRA' : 'Scan to view receipt'}
                   </div>
                 </div>
               )}
 
-              <hr className="border-gray-300 my-2" />
+              <hr className="border-gray-300 my-3" />
               <div className="text-center text-[#1a2a4a] text-[11px] font-bold">
                 Thank you for your business!
               </div>
-              <div className="text-center text-gray-500 text-[8px]">
+              <div className="text-center text-gray-500 text-[8px] mt-1">
                 Evopay Car Wash | KRA eTIMS VSCU v2.0.21
               </div>
             </div>
