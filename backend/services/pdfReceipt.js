@@ -110,8 +110,8 @@ async function streamReceiptPdf(sale, publicBase, res) {
     + 38
     + 34
     + 42
-    + 16
-    + 20;
+    + 14
+    + 10;
 
   const doc = new PDFDocument({
     size: [mmToPt(widthMM), mmToPt(pageHMM)],
@@ -171,7 +171,7 @@ async function streamReceiptPdf(sale, publicBase, res) {
   solidLine(doc, margin, rightX, y, BLUE, 0.7);
   y += 14;
 
-  // ---- Meta rows — Times, non-bold, muted ----
+  // ---- Meta rows ----
   const metaRows = [
     ['Invoice', sale.invoice_no || 'N/A'],
     ['Cashier', sale.cashier || 'Unknown'],
@@ -189,7 +189,7 @@ async function streamReceiptPdf(sale, publicBase, res) {
 
   y += 4;
 
-  // ---- Items header (BOLD) ----
+  // ---- Items header ----
   const colQtyX = margin + contentW * 0.60;
   const colTotalX = rightX;
 
@@ -309,7 +309,7 @@ async function streamReceiptPdf(sale, publicBase, res) {
     doc.font(FONT).fontSize(8).fillColor(GREY)
        .text('Pending eTIMS sync — not a KRA tax invoice.', margin, y, { width: contentW, align: 'center' });
   }
-  y += 16;
+  y += 14;
 
   // ---- Footer ----
   solidLine(doc, margin, rightX, y, LIGHT, 0.4);
