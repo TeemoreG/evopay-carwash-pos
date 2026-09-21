@@ -248,7 +248,7 @@ async function renderPass(sale, publicBase, doc, measureOnly) {
 
   if (signed) {
     doc.font(FONT_BOLD).fontSize(10).fillColor(GREEN)
-       .text('KRA eTIMS VERIFIED', margin, y, { width: contentW, align: 'center' });
+       .text('FISCAL RECEIPT', margin, y, { width: contentW, align: 'center' });
   } else {
     doc.font(FONT_BOLD).fontSize(10).fillColor(AMBER)
        .text('NON-FISCAL RECEIPT', margin, y, { width: contentW, align: 'center' });
