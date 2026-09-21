@@ -14,6 +14,11 @@ const AMBER = '#E35904';
 const BLACK = '#000000';
 const WHITE = '#ffffff';
 
+// Fonts: body = Helvetica (Arial-like); headers = Times-Bold (serif)
+const FONT_BODY = 'Helvetica';
+const FONT_BODY_BOLD = 'Helvetica-Bold';
+const FONT_TITLE = 'Times-Bold';
+const FONT_TITLE_REG = 'Times-Roman';
 
 const paymentLabel = (sale) => {
   const m = String(sale.payment_method || '').trim();
@@ -78,19 +83,14 @@ const fmtTime = (s) => {
 // mm -> points (1 mm = 2.8346 pt)
 const mmToPt = (mm) => mm * 2.8346;
 
-// Dotted line helper (KRA receipt style)
-const dottedLine = (doc, x1, x2, y, color = LIGHT, width = 0.4) => {
-  doc.save();
-  doc.strokeColor(color).lineWidth(width).dash(1, { space: 2 });
-  doc.moveTo(x1, y).lineTo(x2, y).stroke();
-  doc.undash();
-  doc.restore();
+// Solid line helper (KRA receipt style)
+const solidLine = (doc, x1, x2, y, color = LIGHT, width = 0.4) => {
+  doc.strokeColor(color).lineWidth(width).moveTo(x1, y).lineTo(x2, y).stroke();
 };
 
 async function streamReceiptPdf(sale, publicBase, res) {
   const widthMM = 100;
   const marginMM = 8;
-  const contentWMM = widthMM - marginMM * 2;
 
   const items = sale.items || [];
   const signed = isSigned(sale);
@@ -113,8 +113,9 @@ async function streamReceiptPdf(sale, publicBase, res) {
     + 24        // meta (5 rows)
     + 8         // items header
     + itemRowsHeight
-    + 38        // totals + customer pin
-    + 50        // scu block + qr
+    + 38        // totals
+    + 24        // customer pin + scu block
+    + 42        // qr
     + 16        // status
     + 20;       // footer
 
@@ -138,7 +139,7 @@ async function streamReceiptPdf(sale, publicBase, res) {
 
   let y = margin;
 
-      // ---- Logo (centered, sized by width to avoid stretch) ----
+  // ---- Logo (centered) ----
   try {
     const logoUrl = `${publicBase}/evopay-logo.jpg`;
     const buf = await fetchImageBuffer(logoUrl);
@@ -151,32 +152,33 @@ async function streamReceiptPdf(sale, publicBase, res) {
       } catch (sizeErr) {
         logoH = logoW * 0.55;
       }
-            doc.image(buf, (pageW - logoW) / 2, y, { width: logoW, height: logoH });
+      doc.image(buf, (pageW - logoW) / 2, y, { width: logoW, height: logoH });
       y += logoH - mmToPt(3);
     }
   } catch (e) {
     console.warn('[PDF] logo failed:', e.message);
   }
 
-  // ---- Business name ----
-  doc.font('Helvetica-Bold').fontSize(15).fillColor(BLUE)
+  // ---- Business name (TITLE — Times-Bold serif) ----
+  doc.font(FONT_TITLE).fontSize(15).fillColor(BLUE)
      .text('CAR WASH', margin, y, { width: contentW, align: 'center' });
   y += 20;
 
-  doc.font('Helvetica').fontSize(8).fillColor(GREY)
+  doc.font(FONT_BODY).fontSize(8).fillColor(GREY)
      .text('eTIMS Compliant Receipt', margin, y, { width: contentW, align: 'center' });
   y += 12;
 
   if (kraPin) {
-    doc.fontSize(7.5).fillColor(GREY)
+    doc.font(FONT_BODY).fontSize(7.5).fillColor(GREY)
        .text(`KRA PIN: ${kraPin}`, margin, y, { width: contentW, align: 'center' });
     y += 12;
   }
 
-  // Dotted divider
-  dottedLine(doc, margin, rightX, y, BLUE, 0.7);
+  // Solid divider
+  solidLine(doc, margin, rightX, y, BLUE, 0.7);
   y += 14;
 
+  // ---- Meta rows (all body, non-bold) ----
   const metaRows = [
     ['Invoice', sale.invoice_no || 'N/A'],
     ['Cashier', sale.cashier || 'Unknown'],
@@ -185,28 +187,28 @@ async function streamReceiptPdf(sale, publicBase, res) {
     ['Payment', paymentLabel(sale)],
   ];
   metaRows.forEach(([k, v]) => {
-    doc.font('Helvetica').fontSize(8).fillColor(GREY)
+    doc.font(FONT_BODY).fontSize(8).fillColor(GREY)
        .text(k, margin, y, { width: contentW * 0.4, lineBreak: false });
-    doc.font('Helvetica-Bold').fillColor(BLACK)
+    doc.font(FONT_BODY).fillColor(BLACK)
        .text(String(v), margin, y, { width: contentW, align: 'right' });
     y += 12;
   });
 
   y += 4;
 
-    // ---- Items header ----
+  // ---- Items header (BOLD) ----
   const colQtyX = margin + contentW * 0.60;
   const colTotalX = rightX;
 
-  doc.font('Helvetica-Bold').fontSize(7.5).fillColor(BLUE);
+  doc.font(FONT_BODY_BOLD).fontSize(7.5).fillColor(BLUE);
   doc.text('ITEM', margin + 6, y + 4);
   doc.text('QTY', colQtyX, y + 4, { width: 30, align: 'right' });
   doc.text('TOTAL', colTotalX - 60, y + 4, { width: 60, align: 'right' });
   y += 12;
-  dottedLine(doc, margin, rightX, y, LIGHT, 0.5);
+  solidLine(doc, margin, rightX, y, LIGHT, 0.5);
   y += 6;
 
-  // ---- Item rows ----
+  // ---- Item rows (body) ----
   items.forEach((it, idx) => {
     const name = it.item_name || it.name || 'Unknown';
     const qty = Number(it.quantity || 0);
@@ -214,28 +216,27 @@ async function streamReceiptPdf(sale, publicBase, res) {
     const amount = Number(it.total || qty * price);
 
     const nameW = colQtyX - (margin + 6) - 6;
-    const nameH = doc.font('Helvetica').fontSize(7.5).heightOfString(name, { width: nameW });
+    const nameH = doc.font(FONT_BODY).fontSize(7.5).heightOfString(name, { width: nameW });
     const thisRowH = Math.max(14, nameH + 4);
 
     if (idx % 2 === 0) {
       doc.rect(margin, y, contentW, thisRowH).fill(ROW_ALT);
     }
 
-    doc.font('Helvetica').fontSize(7.5).fillColor(BLACK);
+    doc.font(FONT_BODY).fontSize(7.5).fillColor(BLACK);
     doc.text(name, margin + 6, y + 3, { width: nameW });
     doc.text(String(qty), colQtyX, y + 3, { width: 30, align: 'right' });
     doc.text(amount.toFixed(2), colTotalX - 60, y + 3, { width: 60, align: 'right' });
     y += thisRowH;
   });
 
-  dottedLine(doc, margin, rightX, y, BLUE, 0.5);
+  solidLine(doc, margin, rightX, y, BLUE, 0.5);
   y += 12;
 
-    // ---- Totals ----
+  // ---- Totals (body, non-bold except TOTAL value) ----
   const totLabelX = margin;
-  const totValX = rightX;
 
-  doc.font('Helvetica').fontSize(8).fillColor(GREY);
+  doc.font(FONT_BODY).fontSize(8).fillColor(GREY);
   doc.text('Subtotal', totLabelX, y);
   doc.fillColor(BLACK).text(`KES ${subtotal.toFixed(2)}`, totLabelX, y, { width: contentW, align: 'right' });
   y += 12;
@@ -244,65 +245,45 @@ async function streamReceiptPdf(sale, publicBase, res) {
   doc.fillColor(BLACK).text(`KES ${tax.toFixed(2)}`, totLabelX, y, { width: contentW, align: 'right' });
   y += 18;
 
-  // Dotted line above grand total
-  dottedLine(doc, margin, rightX, y - 3, BLUE, 0.6);
+  solidLine(doc, margin, rightX, y - 3, BLUE, 0.6);
   y += 6;
 
-  // Grand total — no bar, bold blue text only
-  doc.font('Helvetica-Bold').fontSize(12).fillColor(BLUE);
+  // Grand total — value bold, label bold
+  doc.font(FONT_BODY_BOLD).fontSize(12).fillColor(BLUE);
   doc.text('TOTAL', margin + 6, y);
   doc.text(`KES ${total.toFixed(2)}`, totLabelX, y, { width: contentW - 6, align: 'right' });
   y += 22;
 
-  // ---- Customer PIN (below totals, above SCU/QR) ----
+  // ---- SCU Information (signed receipts only) ----
   const pinValue = (sale.customer_pin && String(sale.customer_pin).trim() && sale.customer_pin !== 'N/A')
     ? String(sale.customer_pin).trim()
     : 'N/A';
 
-  dottedLine(doc, margin, rightX, y - 4, LIGHT, 0.4);
-  y += 2;
-
-  doc.font('Helvetica').fontSize(8).fillColor(GREY)
-     .text('Customer PIN', margin, y, { width: contentW * 0.5, lineBreak: false });
-  doc.font('Helvetica-Bold').fillColor(BLACK)
-     .text(pinValue, margin, y, { width: contentW, align: 'right' });
-  y += 14;
-
-  // ---- SCU Information (signed receipts only) ----
   if (signed) {
     const cuId = sale.sdc_id || sale.cuId || 'KRACU0300003735';
     const cuInvoiceNo = `${cuId}/${sale.receipt_no || ''}`;
-    const internalData = sale.internal_data || '';
-    const signature = sale.vscu_signature || '';
 
-    dottedLine(doc, margin, rightX, y - 4, LIGHT, 0.4);
+    solidLine(doc, margin, rightX, y - 4, LIGHT, 0.4);
     y += 2;
 
-    doc.font('Helvetica-Bold').fontSize(8).fillColor(BLUE)
+    // SCU Information title — serif bold
+    doc.font(FONT_TITLE).fontSize(9).fillColor(BLUE)
        .text('SCU Information', margin, y, { width: contentW, align: 'left' });
     y += 12;
 
-    doc.font('Helvetica').fontSize(7).fillColor(GREY)
+    // CU Invoice No — label plain, value bold
+    doc.font(FONT_BODY).fontSize(7.5).fillColor(GREY)
        .text('CU Invoice No', margin, y, { width: contentW * 0.4, lineBreak: false });
-    doc.font('Helvetica-Bold').fillColor(BLACK)
+    doc.font(FONT_BODY_BOLD).fontSize(7.5).fillColor(BLACK)
        .text(cuInvoiceNo, margin, y, { width: contentW, align: 'right' });
-    y += 10;
+    y += 11;
 
-    if (internalData) {
-      doc.font('Helvetica').fontSize(7).fillColor(GREY)
-         .text('Internal Data', margin, y, { width: contentW * 0.4, lineBreak: false });
-      doc.font('Helvetica').fontSize(7).fillColor(BLACK)
-         .text(internalData, margin, y, { width: contentW, align: 'right' });
-      y += 10;
-    }
-
-    if (signature) {
-      doc.font('Helvetica').fontSize(7).fillColor(GREY)
-         .text('Signature', margin, y, { width: contentW * 0.4, lineBreak: false });
-      doc.font('Helvetica').fontSize(7).fillColor(BLACK)
-         .text(signature, margin, y, { width: contentW, align: 'right' });
-      y += 12;
-    }
+    // Customer PIN — below CU Invoice No, all plain (non-bold)
+    doc.font(FONT_BODY).fontSize(7.5).fillColor(GREY)
+       .text('Customer PIN', margin, y, { width: contentW * 0.4, lineBreak: false });
+    doc.font(FONT_BODY).fontSize(7.5).fillColor(BLACK)
+       .text(pinValue, margin, y, { width: contentW, align: 'right' });
+    y += 12;
   }
 
   // ---- QR ----
@@ -315,7 +296,7 @@ async function streamReceiptPdf(sale, publicBase, res) {
     doc.image(qrBuf, qrX, y, { width: qrSize, height: qrSize });
     y += qrSize + 4;
 
-    doc.font('Helvetica').fontSize(7).fillColor(GREY)
+    doc.font(FONT_BODY).fontSize(7).fillColor(GREY)
        .text(
          signed ? 'Scan to verify on KRA' : 'Scan to view receipt online',
          margin, y, { width: contentW, align: 'center' }
@@ -327,26 +308,26 @@ async function streamReceiptPdf(sale, publicBase, res) {
 
   // ---- Status ----
   if (signed) {
-    doc.font('Helvetica-Bold').fontSize(8.5).fillColor(GREEN)
+    doc.font(FONT_TITLE).fontSize(10).fillColor(GREEN)
        .text('KRA eTIMS VERIFIED', margin, y, { width: contentW, align: 'center' });
   } else {
-    doc.font('Helvetica-Bold').fontSize(8.5).fillColor(AMBER)
+    doc.font(FONT_TITLE).fontSize(10).fillColor(AMBER)
        .text('NON-FISCAL RECEIPT', margin, y, { width: contentW, align: 'center' });
     y += 12;
-    doc.font('Helvetica').fontSize(7).fillColor(GREY)
+    doc.font(FONT_BODY).fontSize(7).fillColor(GREY)
        .text('Pending eTIMS sync — not a KRA tax invoice.', margin, y, { width: contentW, align: 'center' });
   }
   y += 16;
 
   // ---- Footer ----
-  dottedLine(doc, margin, rightX, y, LIGHT, 0.4);
+  solidLine(doc, margin, rightX, y, LIGHT, 0.4);
   y += 10;
 
-  doc.font('Helvetica-Bold').fontSize(9).fillColor(BLUE)
+  doc.font(FONT_TITLE).fontSize(10).fillColor(BLUE)
      .text('Thank you for your business!', margin, y, { width: contentW, align: 'center' });
   y += 12;
 
-  doc.font('Helvetica').fontSize(6.5).fillColor(GREY)
+  doc.font(FONT_BODY).fontSize(6.5).fillColor(GREY)
      .text('Evopay Car Wash  |  KRA eTIMS VSCU v2.0.21', margin, y, { width: contentW, align: 'center' });
 
   doc.end();
