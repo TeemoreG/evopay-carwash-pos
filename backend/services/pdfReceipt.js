@@ -101,7 +101,7 @@ async function streamReceiptPdf(sale, publicBase, res) {
     40          // logo + brand
     + 14        // subheader + kra pin
     + 8         // divider
-    + 24        // meta
+    + 36        // meta
     + 8         // items header
     + itemRowsHeight
     + 24        // totals
@@ -168,11 +168,11 @@ async function streamReceiptPdf(sale, publicBase, res) {
   doc.strokeColor(BLUE).lineWidth(0.7).moveTo(margin, y).lineTo(rightX, y).stroke();
   y += 14;
 
-  // ---- Meta block (label left, value right — like a modern receipt) ----
-  const metaRows = [
+    const metaRows = [
     ['Invoice', sale.invoice_no || 'N/A'],
     ['Cashier', sale.cashier || 'Unknown'],
     ['Customer', sale.customer || 'Walk-in'],
+    ['Customer PIN', (sale.customer_pin && sale.customer_pin.trim() && sale.customer_pin !== 'N/A') ? sale.customer_pin : 'N/A'],
     ['Date', `${fmtDate(sale.created_at || sale.date)} ${fmtTime(sale.created_at || sale.date)}`],
     ['Payment', paymentLabel(sale)],
   ];
