@@ -1,4 +1,4 @@
-package com.evopay.carwash.pos;
+package com.evopay.carwash;
 
 import android.content.ComponentName;
 import android.content.Context;
@@ -9,6 +9,7 @@ import android.os.IBinder;
 import android.util.Log;
 
 import com.getcapacitor.BridgeActivity;
+import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
@@ -52,10 +53,7 @@ public class MainActivity extends BridgeActivity {
                     bindAttempts = 0;
                     Log.d(TAG, "Printer service bound successfully");
 
-                    // Create callback proxy so Telpo service can invoke it
                     createCallbackProxy();
-
-                    // Initialize the printer once
                     tryInitPrinter();
                 } catch (Exception e) {
                     Log.e(TAG, "Bind failed", e);
@@ -92,7 +90,6 @@ public class MainActivity extends BridgeActivity {
                             } catch (Exception ex) {
                                 Log.e(TAG, "Callback error", ex);
                             }
-                            // Return void for all methods
                             return null;
                         }
                     }
@@ -135,16 +132,16 @@ public class MainActivity extends BridgeActivity {
                 );
                 Log.d(TAG, "bindService returned: " + ok);
 
-                if (!ok) {
-                    // Retry after a short delay — some devices take a moment to start the service
-                    if (bindAttempts < MAX_BIND_ATTEMPTS) {
-                        bindAttempts++;
-                        Log.d(TAG, "Retry bind attempt " + bindAttempts);
-                        getContext().getMainExecutor().execute(() -> {
-                            try { Thread.sleep(1000); } catch (InterruptedException ignored) {}
-                            bindPrinterService();
-                        });
-                    }
+                if (!ok && bindAttempts < MAX_BIND_ATTEMPTS) {
+                    bindAttempts++;
+                    Log.d(TAG, "Retry bind attempt " + bindAttempts);
+                    final int delay = 1000 * bindAttempts;
+                    new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
+                        new Runnable() {
+                            @Override public void run() { bindPrinterService(); }
+                        },
+                        delay
+                    );
                 }
             } catch (Exception e) {
                 Log.e(TAG, "bindPrinterService exception", e);
@@ -167,12 +164,6 @@ public class MainActivity extends BridgeActivity {
             }
         }
 
-        // ==================== Helpers ====================
-        private void invokePrinterMethod(String methodName, Class<?>[] paramTypes, Object... args) throws Exception {
-            Method m = printerService.getClass().getMethod(methodName, paramTypes);
-            m.invoke(printerService, args);
-        }
-
         private Class<?> getCallbackClass() throws ClassNotFoundException {
             return Class.forName("com.iposprinter.iposprinterservice.IPosPrinterCallback");
         }
@@ -181,7 +172,7 @@ public class MainActivity extends BridgeActivity {
 
         @PluginMethod
         public void isReady(PluginCall call) {
-            com.getcapacitor.JSObject ret = new com.getcapacitor.JSObject();
+            JSObject ret = new JSObject();
             ret.put("ready", isBound && printerService != null);
             ret.put("initialized", isInitialized);
             call.resolve(ret);
@@ -202,7 +193,6 @@ public class MainActivity extends BridgeActivity {
             try {
                 Class<?> cbClass = getCallbackClass();
 
-                // Ensure init
                 if (!isInitialized) {
                     tryInitPrinter();
                 }
@@ -220,14 +210,13 @@ public class MainActivity extends BridgeActivity {
                 printNewline.invoke(printerService, printerCallback);
                 printNewline.invoke(printerService, printerCallback);
 
-                // Feed + cut. Try method with int param first
+                // Feed + cut (try int-arg variant first, then no-arg)
                 try {
                     Method performPrint = printerService.getClass().getMethod(
                         "performPrint", int.class, cbClass
                     );
                     performPrint.invoke(printerService, 1, printerCallback);
                 } catch (NoSuchMethodException nsme) {
-                    // Some firmware uses no-int variant
                     try {
                         Method performPrint = printerService.getClass().getMethod(
                             "performPrint", cbClass
