@@ -201,30 +201,30 @@ async function renderPass(sale, publicBase, doc, measureOnly) {
   if (signed) {
     const cuId = sale.sdc_id || sale.cuId || 'KRACU0300003735';
     const cuInvoiceNo = `${cuId}/${sale.receipt_no || ''}`;
-    const receiptRef = sale.receipt_no ? `${cuId}/${sale.receipt_no}` : 'N/A';
+    const receiptRef = sale.invoice_no || 'N/A';
 
     solidLine(doc, margin, rightX, y - 4, LIGHT, 0.4);
     y += 2;
 
-    doc.font(FONT).fontSize(10).fillColor(BLUE)
+    doc.font(FONT).fontSize(10).fillColor(BLACK)
        .text('SCU Information', margin, y, { width: contentW, align: 'left' });
     y += 13;
 
-    doc.font(FONT).fontSize(8.5).fillColor(MUTED)
+    doc.font(FONT).fontSize(8.5).fillColor(BLACK)
        .text('CU Invoice No', margin, y, { width: contentW * 0.4, lineBreak: false });
     doc.font(FONT).fontSize(8.5).fillColor(BLACK)
        .text(cuInvoiceNo, margin, y, { width: contentW, align: 'right' });
     y += 12;
 
-    doc.font(FONT).fontSize(8.5).fillColor(MUTED)
+    doc.font(FONT).fontSize(8.5).fillColor(BLACK)
        .text('Customer PIN', margin, y, { width: contentW * 0.4, lineBreak: false });
-    doc.font(FONT).fontSize(8.5).fillColor(MUTED)
+    doc.font(FONT).fontSize(8.5).fillColor(BLACK)
        .text(pinValue, margin, y, { width: contentW, align: 'right' });
     y += 12;
 
-    doc.font(FONT).fontSize(8.5).fillColor(MUTED)
+    doc.font(FONT).fontSize(8.5).fillColor(BLACK)
        .text('Receipt Ref No', margin, y, { width: contentW * 0.4, lineBreak: false });
-    doc.font(FONT).fontSize(8.5).fillColor(MUTED)
+    doc.font(FONT).fontSize(8.5).fillColor(BLACK)
        .text(receiptRef, margin, y, { width: contentW, align: 'right' });
     y += 12;
   }
