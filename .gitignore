@@ -1,10 +1,66 @@
+# Dependencies
 node_modules/
+
+# Build output
 dist/
+build/
+out/
+
+# Env files
 .env
 .env.local
 .env.production
+.env.*.local
 backend/.env
+
+# Database
 backend/db/evopay.db
 backend/db/*.db
+backend/db/*.sqlite
+backend/db/*.sqlite3
+
+# Logs
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
 .DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temp / cache
+.tmp/
+caches/
+daemon/
+native/
+temp/
+tmp/
+
+# Android (Capacitor build artifacts)
+android/.gradle/
+android/.idea/
+android/build/
+android/local.properties
+android/FakeDependency.jar
+android/app/build/
+android/app/src/main/assets/public/
+android/app/src/main/assets/capacitor.config.json
+android/app/src/main/assets/capacitor.plugins.json
+android/app/src/main/res/xml/config.xml
+android/capacitor-cordova-android-plugins/
+android/.gitignore
+
+# Ghost file from broken paste
+process.exit(0))
+
+# Turso local
+local.db
+*.db-shm
+*.db-wal
