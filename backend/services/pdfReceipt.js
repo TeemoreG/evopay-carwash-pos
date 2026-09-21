@@ -12,6 +12,7 @@ const GREEN = '#057a05';
 const AMBER = '#E35904';
 const BLACK = '#000000';
 
+// Times New Roman (pdfkit built-in equivalent)
 const FONT = 'Times-Roman';
 const FONT_BOLD = 'Times-Bold';
 
@@ -75,48 +76,11 @@ const fmtTime = (s) => {
   });
 };
 
+// mm -> points (1 mm = 2.8346 pt)
 const mmToPt = (mm) => mm * 2.8346;
 
 const solidLine = (doc, x1, x2, y, color = LIGHT, width = 0.4) => {
   doc.strokeColor(color).lineWidth(width).moveTo(x1, y).lineTo(x2, y).stroke();
-};
-
-// ---- Height estimator (in pt) ----
-const estimateContentHeight = (sale, opts) => {
-  const { items, signed } = opts;
-  const rowH = 12;               // meta/totals rows (pt)
-  const itemBaseH = 14;          // per item min height
-  const lineH = 5;               // per wrapped item-name line
-  const qrSize = mmToPt(28);
-  const mm = mmToPt(1);
-
-  let h = 0;
-  h += 18 * mm;                  // logo
-  h += 20 + 12;                  // title + subheader
-  h += 12;                       // KRA PIN row
-  h += 14;                       // divider gap
-  h += 5 * rowH;                 // meta rows
-  h += 4;                        // spacer
-  h += 12;                       // items header
-  h += 6;                        // gap
-  items.forEach((it) => {
-    const name = String(it.item_name || '');
-    const lines = Math.max(1, Math.ceil(name.length / 34));
-    h += Math.max(itemBaseH, lines * lineH + 9);
-  });
-  h += 12;                       // items bottom line gap
-  h += 12 + 12 + 18;             // subtotal + vat + gap
-  h += 6 + 22;                   // total line + total row
-  if (signed) {
-    h += 2 + 13;                 // scu title
-    h += 12 * 3;                 // cu invoice + cust pin + ref
-  }
-  h += qrSize + 16;              // qr + caption
-  h += 16;                       // status
-  h += 10 + 12;                  // footer line + thanks
-  h += 12;                       // footer small text
-  h += 8;                        // bottom padding
-  return h;
 };
 
 async function streamReceiptPdf(sale, publicBase, res) {
@@ -130,12 +94,27 @@ async function streamReceiptPdf(sale, publicBase, res) {
   const tax = Number(sale.tax || 0);
   const total = Number(sale.total || 0);
 
-  // Dynamic page height based on content
-  const estimatedH = estimateContentHeight(sale, { items, signed });
-  const pageH = Math.max(estimatedH, mmToPt(120));
+  const itemRowsHeight = items.reduce((sum, it) => {
+    const name = String(it.item_name || '');
+    const lines = Math.max(1, Math.ceil(name.length / 34));
+    return sum + lines * 5 + 3;
+  }, 0);
+
+  const pageHMM =
+    40
+    + 14
+    + 8
+    + 24
+    + 8
+    + itemRowsHeight
+    + 38
+    + 34
+    + 42
+    + 16
+    + 20;
 
   const doc = new PDFDocument({
-    size: [mmToPt(widthMM), pageH],
+    size: [mmToPt(widthMM), mmToPt(pageHMM)],
     margin: mmToPt(marginMM),
     info: {
       Title: `Receipt ${sale.invoice_no}`,
@@ -147,6 +126,7 @@ async function streamReceiptPdf(sale, publicBase, res) {
   doc.pipe(res);
 
   const pageW = doc.page.width;
+  const pageH = doc.page.height;
   const margin = mmToPt(marginMM);
   const contentW = pageW - margin * 2;
   const rightX = pageW - margin;
@@ -191,7 +171,7 @@ async function streamReceiptPdf(sale, publicBase, res) {
   solidLine(doc, margin, rightX, y, BLUE, 0.7);
   y += 14;
 
-  // ---- Meta rows ----
+  // ---- Meta rows — Times, non-bold, muted ----
   const metaRows = [
     ['Invoice', sale.invoice_no || 'N/A'],
     ['Cashier', sale.cashier || 'Unknown'],
@@ -209,7 +189,7 @@ async function streamReceiptPdf(sale, publicBase, res) {
 
   y += 4;
 
-  // ---- Items header ----
+  // ---- Items header (BOLD) ----
   const colQtyX = margin + contentW * 0.60;
   const colTotalX = rightX;
 
@@ -275,13 +255,13 @@ async function streamReceiptPdf(sale, publicBase, res) {
     solidLine(doc, margin, rightX, y - 4, LIGHT, 0.4);
     y += 2;
 
-    doc.font(FONT_BOLD).fontSize(10).fillColor(BLUE)
+    doc.font(FONT).fontSize(10).fillColor(BLUE)
        .text('SCU Information', margin, y, { width: contentW, align: 'left' });
     y += 13;
 
     doc.font(FONT).fontSize(8.5).fillColor(MUTED)
        .text('CU Invoice No', margin, y, { width: contentW * 0.4, lineBreak: false });
-    doc.font(FONT_BOLD).fontSize(8.5).fillColor(BLACK)
+    doc.font(FONT).fontSize(8.5).fillColor(BLACK)
        .text(cuInvoiceNo, margin, y, { width: contentW, align: 'right' });
     y += 12;
 
