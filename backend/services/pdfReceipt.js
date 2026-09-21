@@ -12,7 +12,6 @@ const GREEN = '#057a05';
 const AMBER = '#E35904';
 const BLACK = '#000000';
 
-// Times New Roman (pdfkit built-in equivalent)
 const FONT = 'Times-Roman';
 const FONT_BOLD = 'Times-Bold';
 
@@ -56,34 +55,24 @@ const fmtDate = (s) => {
   if (!s) return 'N/A';
   const d = new Date(s);
   if (isNaN(d)) return String(s);
-  return d.toLocaleDateString('en-KE', {
-    timeZone: TZ,
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
+  return d.toLocaleDateString('en-KE', { timeZone: TZ, day: '2-digit', month: 'short', year: 'numeric' });
 };
 
 const fmtTime = (s) => {
   if (!s) return '';
   const d = new Date(s);
   if (isNaN(d)) return '';
-  return d.toLocaleTimeString('en-KE', {
-    timeZone: TZ,
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  });
+  return d.toLocaleTimeString('en-KE', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false });
 };
 
-// mm -> points (1 mm = 2.8346 pt)
 const mmToPt = (mm) => mm * 2.8346;
 
 const solidLine = (doc, x1, x2, y, color = LIGHT, width = 0.4) => {
   doc.strokeColor(color).lineWidth(width).moveTo(x1, y).lineTo(x2, y).stroke();
 };
 
-async function streamReceiptPdf(sale, publicBase, res) {
+// ---- Render pass. If measureOnly=true, returns final Y (height used). ----
+async function renderPass(sale, publicBase, doc, measureOnly) {
   const widthMM = 100;
   const marginMM = 8;
 
@@ -94,39 +83,7 @@ async function streamReceiptPdf(sale, publicBase, res) {
   const tax = Number(sale.tax || 0);
   const total = Number(sale.total || 0);
 
-  const itemRowsHeight = items.reduce((sum, it) => {
-    const name = String(it.item_name || '');
-    const lines = Math.max(1, Math.ceil(name.length / 34));
-    return sum + lines * 5 + 3;
-  }, 0);
-
-  const pageHMM =
-    40
-    + 14
-    + 8
-    + 24
-    + 8
-    + itemRowsHeight
-    + 38
-    + 34
-    + 42
-    + 14
-    + 10;
-
-  const doc = new PDFDocument({
-    size: [mmToPt(widthMM), mmToPt(pageHMM)],
-    margin: mmToPt(marginMM),
-    info: {
-      Title: `Receipt ${sale.invoice_no}`,
-      Author: 'Evopay Car Wash',
-      Subject: 'Receipt',
-    },
-  });
-
-  doc.pipe(res);
-
   const pageW = doc.page.width;
-  const pageH = doc.page.height;
   const margin = mmToPt(marginMM);
   const contentW = pageW - margin * 2;
   const rightX = pageW - margin;
@@ -146,14 +103,13 @@ async function streamReceiptPdf(sale, publicBase, res) {
       } catch (sizeErr) {
         logoH = logoW * 0.55;
       }
-      doc.image(buf, (pageW - logoW) / 2, y, { width: logoW, height: logoH });
+      if (!measureOnly) doc.image(buf, (pageW - logoW) / 2, y, { width: logoW, height: logoH });
       y += logoH - mmToPt(3);
     }
   } catch (e) {
     console.warn('[PDF] logo failed:', e.message);
   }
 
-  // ---- Business name ----
   doc.font(FONT_BOLD).fontSize(15).fillColor(BLUE)
      .text('CAR WASH', margin, y, { width: contentW, align: 'center' });
   y += 20;
@@ -171,7 +127,6 @@ async function streamReceiptPdf(sale, publicBase, res) {
   solidLine(doc, margin, rightX, y, BLUE, 0.7);
   y += 14;
 
-  // ---- Meta rows ----
   const metaRows = [
     ['Invoice', sale.invoice_no || 'N/A'],
     ['Cashier', sale.cashier || 'Unknown'],
@@ -189,7 +144,6 @@ async function streamReceiptPdf(sale, publicBase, res) {
 
   y += 4;
 
-  // ---- Items header ----
   const colQtyX = margin + contentW * 0.60;
   const colTotalX = rightX;
 
@@ -201,7 +155,6 @@ async function streamReceiptPdf(sale, publicBase, res) {
   solidLine(doc, margin, rightX, y, LIGHT, 0.5);
   y += 6;
 
-  // ---- Item rows ----
   items.forEach((it) => {
     const name = it.item_name || it.name || 'Unknown';
     const qty = Number(it.quantity || 0);
@@ -222,7 +175,6 @@ async function streamReceiptPdf(sale, publicBase, res) {
   solidLine(doc, margin, rightX, y, BLUE, 0.5);
   y += 12;
 
-  // ---- Totals ----
   const totLabelX = margin;
 
   doc.font(FONT).fontSize(9).fillColor(GREY);
@@ -242,7 +194,6 @@ async function streamReceiptPdf(sale, publicBase, res) {
   doc.text(`KES ${total.toFixed(2)}`, totLabelX, y, { width: contentW - 6, align: 'right' });
   y += 22;
 
-  // ---- SCU Information ----
   const pinValue = (sale.customer_pin && String(sale.customer_pin).trim() && sale.customer_pin !== 'N/A')
     ? String(sale.customer_pin).trim()
     : 'N/A';
@@ -278,27 +229,23 @@ async function streamReceiptPdf(sale, publicBase, res) {
     y += 12;
   }
 
-  // ---- QR ----
   try {
     const target = buildQrTarget(sale, publicBase);
     const qrDataUrl = await QRCode.toDataURL(target, { width: 300, margin: 1 });
     const qrBuf = Buffer.from(qrDataUrl.split(',')[1], 'base64');
     const qrSize = mmToPt(28);
     const qrX = (pageW - qrSize) / 2;
-    doc.image(qrBuf, qrX, y, { width: qrSize, height: qrSize });
+    if (!measureOnly) doc.image(qrBuf, qrX, y, { width: qrSize, height: qrSize });
     y += qrSize + 4;
 
     doc.font(FONT).fontSize(8).fillColor(GREY)
-       .text(
-         signed ? 'Scan to verify on KRA' : 'Scan to view receipt online',
-         margin, y, { width: contentW, align: 'center' }
-       );
+       .text(signed ? 'Scan to verify on KRA' : 'Scan to view receipt online',
+         margin, y, { width: contentW, align: 'center' });
     y += 12;
   } catch (e) {
     console.warn('[PDF] qr failed:', e.message);
   }
 
-  // ---- Status ----
   if (signed) {
     doc.font(FONT_BOLD).fontSize(10).fillColor(GREEN)
        .text('KRA eTIMS VERIFIED', margin, y, { width: contentW, align: 'center' });
@@ -309,9 +256,8 @@ async function streamReceiptPdf(sale, publicBase, res) {
     doc.font(FONT).fontSize(8).fillColor(GREY)
        .text('Pending eTIMS sync — not a KRA tax invoice.', margin, y, { width: contentW, align: 'center' });
   }
-  y += 14;
+  y += 16;
 
-  // ---- Footer ----
   solidLine(doc, margin, rightX, y, LIGHT, 0.4);
   y += 10;
 
@@ -322,6 +268,37 @@ async function streamReceiptPdf(sale, publicBase, res) {
   doc.font(FONT).fontSize(7.5).fillColor(GREY)
      .text('Evopay Car Wash  |  KRA eTIMS VSCU v2.0.21', margin, y, { width: contentW, align: 'center' });
 
+  return y;
+}
+
+async function streamReceiptPdf(sale, publicBase, res) {
+  const widthMM = 100;
+
+  // ---- Pass 1: measure with tall page (won't be sent) ----
+  const measureDoc = new PDFDocument({
+    size: [mmToPt(widthMM), mmToPt(2000)],
+    margin: mmToPt(8),
+  });
+  measureDoc.on('data', () => {});
+  const usedY = await renderPass(sale, publicBase, measureDoc, true);
+  measureDoc.end();
+
+  // Final height = content end + bottom margin (8mm)
+  const pageHMM = Math.max(60, (usedY / 2.8346) + 8);
+
+  // ---- Pass 2: real render ----
+  const doc = new PDFDocument({
+    size: [mmToPt(widthMM), mmToPt(pageHMM)],
+    margin: mmToPt(8),
+    info: {
+      Title: `Receipt ${sale.invoice_no}`,
+      Author: 'Evopay Car Wash',
+      Subject: 'Receipt',
+    },
+  });
+
+  doc.pipe(res);
+  await renderPass(sale, publicBase, doc, false);
   doc.end();
 }
 
