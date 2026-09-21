@@ -454,7 +454,7 @@ const Sales = () => {
         </div>
         <div className="lg:col-span-5 xl:col-span-4 flex flex-col h-[calc(100vh-180px)] min-h-125">
           <div className="flex-1 min-h-0">
-            <Cart
+                        <Cart
               lines={lines}
               onQty={handleQty}
               onRemove={handleRemove}
@@ -462,6 +462,8 @@ const Sales = () => {
               setDiscount={setDiscount}
               customer={customer}
               setCustomer={setCustomer}
+              customerPin={customerPin}
+              setCustomerPin={setCustomerPin}
               itemCount={itemCount}
               onClear={resetCart}
             />
@@ -487,7 +489,7 @@ const Sales = () => {
         )}
         {mobileTab === 'cart' && (
           <div className="h-[calc(100vh-280px)] min-h-80">
-            <Cart
+                        <Cart
               lines={lines}
               onQty={handleQty}
               onRemove={handleRemove}
@@ -495,6 +497,8 @@ const Sales = () => {
               setDiscount={setDiscount}
               customer={customer}
               setCustomer={setCustomer}
+              customerPin={customerPin}
+              setCustomerPin={setCustomerPin}
               itemCount={itemCount}
               onClear={resetCart}
             />

@@ -3,7 +3,7 @@ import axiosInstance from '../../api/axiosConfig';
 
 const TAX_RATES = { A: 0, B: 0.16, C: 0 };
 
-const Cart = ({ lines, onQty, onRemove, discount, setDiscount, customer, setCustomer }) => {
+const Cart = ({ lines, onQty, onRemove, discount, setDiscount, customer, setCustomer, customerPin, setCustomerPin }) => {
   const [customers, setCustomers] = useState([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef(null);
@@ -63,13 +63,17 @@ const Cart = ({ lines, onQty, onRemove, discount, setDiscount, customer, setCust
             placeholder="Walk-in customer or plate..."
             className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[#f47b20]"
           />
-          {showDropdown && filteredCustomers.length > 0 && (
+                    {showDropdown && filteredCustomers.length > 0 && (
             <div className="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-40 overflow-y-auto">
               {filteredCustomers.map((c, i) => (
                 <button
                   key={c.id || i}
                   type="button"
-                  onClick={() => { setCustomer(c.name || c.plate || ''); setShowDropdown(false); }}
+                  onClick={() => {
+                    setCustomer(c.name || c.plate || '');
+                    if (c.pin && setCustomerPin) setCustomerPin(c.pin);
+                    setShowDropdown(false);
+                  }}
                   className="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-xs border-b border-slate-50 last:border-0"
                 >
                   <span className="font-medium text-slate-700">{c.name || c.plate}</span>
@@ -78,6 +82,21 @@ const Cart = ({ lines, onQty, onRemove, discount, setDiscount, customer, setCust
               ))}
             </div>
           )}
+        </div>
+
+        {/* Customer PIN (optional) */}
+        <div className="mt-2">
+          <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+            Customer PIN / KRA PIN <span className="text-slate-300 normal-case">(optional)</span>
+          </label>
+          <input
+            type="text"
+            value={customerPin || ''}
+            onChange={(e) => setCustomerPin && setCustomerPin(e.target.value.toUpperCase())}
+            placeholder="e.g. A123456789Z"
+            maxLength={11}
+            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[#f47b20]"
+          />
         </div>
       </div>
 
