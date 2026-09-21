@@ -481,33 +481,34 @@ const ThermalReceipt = ({ sale, onClose, onDownload, onPrint }) => {
   };
 
   const handleWebPrint = async () => {
-    setPrinting(true);
-    try {
-      if (printerCfg.mode && printerCfg.mode !== 'browser') {
-        try {
-          await printReceipt(sale, printerCfg);
-          toast.success('Receipt sent to printer');
-          if (onPrint) onPrint();
-          return;
-        } catch (nativeErr) {
-          console.warn('Configured printer failed, falling back to PDF:', nativeErr);
-          toast.info('Printer unavailable — opening PDF');
-        }
+  setPrinting(true);
+  try {
+    if (printerCfg.mode && printerCfg.mode !== 'browser') {
+      try {
+        await printReceipt(sale, printerCfg);
+        toast.success('Receipt sent to printer');
+        if (onPrint) onPrint();
+        return;
+      } catch (nativeErr) {
+        console.warn('Configured printer failed, falling back to PDF:', nativeErr);
+        toast.info('Printer unavailable — opening PDF');
       }
-
-      const doc = await generateThermalReceipt(sale, logoRef, getPaperWidthMM());
-      if (!doc) throw new Error('PDF generation failed');
-      const url = URL.createObjectURL(doc.output('blob'));
-      const win = window.open(url);
-      if (win) win.onload = () => win.print();
-      if (onPrint) onPrint();
-    } catch (e) {
-      console.error(e);
-      toast.error('Print failed: ' + (e.message || 'Unknown'));
-    } finally {
-      setPrinting(false);
     }
-  };
+
+    const doc = await generateThermalReceipt(sale, logoRef, getPaperWidthMM());
+    if (!doc) throw new Error('PDF generation failed');
+
+    // Download instead of window.print() — user opens in PDF viewer at correct size
+    doc.save(`receipt-${sale.invoice_no || Date.now()}.pdf`);
+    toast.success('Receipt saved — open the file to print');
+    if (onPrint) onPrint();
+  } catch (e) {
+    console.error(e);
+    toast.error('Print failed: ' + (e.message || 'Unknown'));
+  } finally {
+    setPrinting(false);
+  }
+};
 
   const handleDownload = async () => {
     try {
