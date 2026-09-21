@@ -101,10 +101,10 @@ async function streamReceiptPdf(sale, publicBase, res) {
     40          // logo + brand
     + 14        // subheader + kra pin
     + 8         // divider
-    + 36        // meta
+    + 24        // meta (5 rows)
     + 8         // items header
     + itemRowsHeight
-    + 24        // totals
+    + 38        // totals + customer pin
     + 42        // qr
     + 16        // status
     + 20;       // footer
@@ -168,11 +168,10 @@ async function streamReceiptPdf(sale, publicBase, res) {
   doc.strokeColor(BLUE).lineWidth(0.7).moveTo(margin, y).lineTo(rightX, y).stroke();
   y += 14;
 
-    const metaRows = [
+  const metaRows = [
     ['Invoice', sale.invoice_no || 'N/A'],
     ['Cashier', sale.cashier || 'Unknown'],
     ['Customer', sale.customer || 'Walk-in'],
-    ['Customer PIN', (sale.customer_pin && sale.customer_pin.trim() && sale.customer_pin !== 'N/A') ? sale.customer_pin : 'N/A'],
     ['Date', `${fmtDate(sale.created_at || sale.date)} ${fmtTime(sale.created_at || sale.date)}`],
     ['Payment', paymentLabel(sale)],
   ];
@@ -245,6 +244,20 @@ async function streamReceiptPdf(sale, publicBase, res) {
   doc.text('TOTAL', margin + 6, y);
   doc.text(`KES ${total.toFixed(2)}`, totLabelX, y, { width: contentW - 6, align: 'right' });
   y += 22;
+
+  // ---- Customer PIN (below totals, above QR) ----
+  const pinValue = (sale.customer_pin && String(sale.customer_pin).trim() && sale.customer_pin !== 'N/A')
+    ? String(sale.customer_pin).trim()
+    : 'N/A';
+
+  doc.strokeColor(LIGHT).lineWidth(0.4).moveTo(margin, y - 4).lineTo(rightX, y - 4).stroke();
+  y += 2;
+
+  doc.font('Helvetica').fontSize(8).fillColor(GREY)
+     .text('Customer PIN', margin, y, { width: contentW * 0.5, lineBreak: false });
+  doc.font('Helvetica-Bold').fillColor(BLACK)
+     .text(pinValue, margin, y, { width: contentW, align: 'right' });
+  y += 14;
 
   // ---- QR ----
   try {
