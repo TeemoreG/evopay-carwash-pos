@@ -25,15 +25,21 @@ async function getPendingCount(page) {
 async function markSaleAsSynced(saleId, response) {
   if (!saleId) return;
   try {
-    const signature = response?.data?.rcptSign || '';
-    const receiptNo = response?.data?.rcptNo || response?.data?.rcptInvcNo || '';
     await db.runAsync(
       `UPDATE sales SET status = 'Completed', synced = 1, synced_at = datetime('now'),
-                        vscu_signature = ?, receipt_no = ?
+                        vscu_signature = ?, receipt_no = ?,
+                        internal_data = ?, sdc_id = ?, mrc_no = ?
        WHERE id = ?`,
-      [signature, receiptNo, saleId]
+      [
+        response?.data?.rcptSign || '',
+        response?.data?.rcptNo || response?.data?.rcptInvcNo || '',
+        response?.data?.intrlData || null,
+        response?.data?.sdcId || null,
+        response?.data?.mrcNo || null,
+        saleId
+      ]
     );
-    console.log(`[SYNC] marked saleId=${saleId} as synced rcptNo=${receiptNo}`);
+    console.log(`[SYNC] marked saleId=${saleId} as synced rcptNo=${response?.data?.rcptNo || ''}`);
   } catch (e) {
     console.error(`[SYNC] failed to mark saleId=${saleId} synced:`, e.message);
   }

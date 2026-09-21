@@ -189,6 +189,9 @@ async function materializeSale(session) {
   let queued = false;
   let signature = null;
   let receiptNo = null;
+  let internalData = null;
+  let sdcId = null;
+  let mrcNo = null;
   let vscuResponse = null;
 
   const saleForVscu = {
@@ -214,6 +217,9 @@ async function materializeSale(session) {
         synced = true;
         signature = vscuResponse.data?.rcptSign || '';
         receiptNo = vscuResponse.data?.rcptNo || vscuResponse.data?.rcptInvcNo || '';
+        internalData = vscuResponse.data?.intrlData || '';
+        sdcId = vscuResponse.data?.sdcId || '';
+        mrcNo = vscuResponse.data?.mrcNo || '';
         console.log(`[MATERIALIZE][VSCU] synced rcptNo=${receiptNo}`);
 
         for (const item of items) {
@@ -300,8 +306,11 @@ async function materializeSale(session) {
   const syncedFlag = synced ? 1 : 0;
 
   await db.runAsync(
-    `UPDATE sales SET status = ?, synced = ?, vscu_signature = ?, receipt_no = ? WHERE id = ?`,
-    [finalStatus, syncedFlag, signature, receiptNo, saleId]
+    `UPDATE sales SET status = ?, synced = ?, vscu_signature = ?, receipt_no = ?,
+                      internal_data = ?, sdc_id = ?, mrc_no = ?
+     WHERE id = ?`,
+    [finalStatus, syncedFlag, signature || null, receiptNo || null,
+     internalData || null, sdcId || null, mrcNo || null, saleId]
   );
 
   // ============================================

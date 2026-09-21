@@ -30,7 +30,7 @@ const buildQrTarget = (sale, baseUrl) => {
     const d = new Date(sale.created_at || sale.date || new Date().toISOString());
     const date = String(d.getDate()).padStart(2, '0') + String(d.getMonth() + 1).padStart(2, '0') + d.getFullYear();
     const time = String(d.getHours()).padStart(2, '0') + String(d.getMinutes()).padStart(2, '0') + String(d.getSeconds()).padStart(2, '0');
-    const cuId = sale.cuId || 'KRACU0300003735';
+    const cuId = sale.sdc_id || sale.cuId || 'KRACU0300003735';
     const payload = `${date}#${time}#${cuId}#${sale.invoice_no || ''}#${sale.internal_data || ''}#${sale.vscu_signature || ''}`;
     return `https://etims.kra.go.ke/common/link/etims/receipt/indexEtimsReceipt?qrCode=${encodeURIComponent(payload)}`;
   }
@@ -78,6 +78,15 @@ const fmtTime = (s) => {
 // mm -> points (1 mm = 2.8346 pt)
 const mmToPt = (mm) => mm * 2.8346;
 
+// Dotted line helper (KRA receipt style)
+const dottedLine = (doc, x1, x2, y, color = LIGHT, width = 0.4) => {
+  doc.save();
+  doc.strokeColor(color).lineWidth(width).dash(1, { space: 2 });
+  doc.moveTo(x1, y).lineTo(x2, y).stroke();
+  doc.undash();
+  doc.restore();
+};
+
 async function streamReceiptPdf(sale, publicBase, res) {
   const widthMM = 100;
   const marginMM = 8;
@@ -105,7 +114,7 @@ async function streamReceiptPdf(sale, publicBase, res) {
     + 8         // items header
     + itemRowsHeight
     + 38        // totals + customer pin
-    + 42        // qr
+    + 50        // scu block + qr
     + 16        // status
     + 20;       // footer
 
@@ -164,8 +173,8 @@ async function streamReceiptPdf(sale, publicBase, res) {
     y += 12;
   }
 
-  // Divider
-  doc.strokeColor(BLUE).lineWidth(0.7).moveTo(margin, y).lineTo(rightX, y).stroke();
+  // Dotted divider
+  dottedLine(doc, margin, rightX, y, BLUE, 0.7);
   y += 14;
 
   const metaRows = [
@@ -194,7 +203,7 @@ async function streamReceiptPdf(sale, publicBase, res) {
   doc.text('QTY', colQtyX, y + 4, { width: 30, align: 'right' });
   doc.text('TOTAL', colTotalX - 60, y + 4, { width: 60, align: 'right' });
   y += 12;
-  doc.strokeColor(LIGHT).lineWidth(0.5).moveTo(margin, y).lineTo(rightX, y).stroke();
+  dottedLine(doc, margin, rightX, y, LIGHT, 0.5);
   y += 6;
 
   // ---- Item rows ----
@@ -219,7 +228,7 @@ async function streamReceiptPdf(sale, publicBase, res) {
     y += thisRowH;
   });
 
-  doc.strokeColor(BLUE).lineWidth(0.5).moveTo(margin, y).lineTo(rightX, y).stroke();
+  dottedLine(doc, margin, rightX, y, BLUE, 0.5);
   y += 12;
 
     // ---- Totals ----
@@ -235,8 +244,8 @@ async function streamReceiptPdf(sale, publicBase, res) {
   doc.fillColor(BLACK).text(`KES ${tax.toFixed(2)}`, totLabelX, y, { width: contentW, align: 'right' });
   y += 18;
 
-  // Thin blue line above grand total
-  doc.strokeColor(BLUE).lineWidth(0.6).moveTo(margin, y - 3).lineTo(rightX, y - 3).stroke();
+  // Dotted line above grand total
+  dottedLine(doc, margin, rightX, y - 3, BLUE, 0.6);
   y += 6;
 
   // Grand total — no bar, bold blue text only
@@ -245,12 +254,12 @@ async function streamReceiptPdf(sale, publicBase, res) {
   doc.text(`KES ${total.toFixed(2)}`, totLabelX, y, { width: contentW - 6, align: 'right' });
   y += 22;
 
-  // ---- Customer PIN (below totals, above QR) ----
+  // ---- Customer PIN (below totals, above SCU/QR) ----
   const pinValue = (sale.customer_pin && String(sale.customer_pin).trim() && sale.customer_pin !== 'N/A')
     ? String(sale.customer_pin).trim()
     : 'N/A';
 
-  doc.strokeColor(LIGHT).lineWidth(0.4).moveTo(margin, y - 4).lineTo(rightX, y - 4).stroke();
+  dottedLine(doc, margin, rightX, y - 4, LIGHT, 0.4);
   y += 2;
 
   doc.font('Helvetica').fontSize(8).fillColor(GREY)
@@ -258,6 +267,43 @@ async function streamReceiptPdf(sale, publicBase, res) {
   doc.font('Helvetica-Bold').fillColor(BLACK)
      .text(pinValue, margin, y, { width: contentW, align: 'right' });
   y += 14;
+
+  // ---- SCU Information (signed receipts only) ----
+  if (signed) {
+    const cuId = sale.sdc_id || sale.cuId || 'KRACU0300003735';
+    const cuInvoiceNo = `${cuId}/${sale.receipt_no || ''}`;
+    const internalData = sale.internal_data || '';
+    const signature = sale.vscu_signature || '';
+
+    dottedLine(doc, margin, rightX, y - 4, LIGHT, 0.4);
+    y += 2;
+
+    doc.font('Helvetica-Bold').fontSize(8).fillColor(BLUE)
+       .text('SCU Information', margin, y, { width: contentW, align: 'left' });
+    y += 12;
+
+    doc.font('Helvetica').fontSize(7).fillColor(GREY)
+       .text('CU Invoice No', margin, y, { width: contentW * 0.4, lineBreak: false });
+    doc.font('Helvetica-Bold').fillColor(BLACK)
+       .text(cuInvoiceNo, margin, y, { width: contentW, align: 'right' });
+    y += 10;
+
+    if (internalData) {
+      doc.font('Helvetica').fontSize(7).fillColor(GREY)
+         .text('Internal Data', margin, y, { width: contentW * 0.4, lineBreak: false });
+      doc.font('Helvetica').fontSize(7).fillColor(BLACK)
+         .text(internalData, margin, y, { width: contentW, align: 'right' });
+      y += 10;
+    }
+
+    if (signature) {
+      doc.font('Helvetica').fontSize(7).fillColor(GREY)
+         .text('Signature', margin, y, { width: contentW * 0.4, lineBreak: false });
+      doc.font('Helvetica').fontSize(7).fillColor(BLACK)
+         .text(signature, margin, y, { width: contentW, align: 'right' });
+      y += 12;
+    }
+  }
 
   // ---- QR ----
   try {
@@ -293,7 +339,7 @@ async function streamReceiptPdf(sale, publicBase, res) {
   y += 16;
 
   // ---- Footer ----
-  doc.strokeColor(LIGHT).lineWidth(0.4).moveTo(margin, y).lineTo(rightX, y).stroke();
+  dottedLine(doc, margin, rightX, y, LIGHT, 0.4);
   y += 10;
 
   doc.font('Helvetica-Bold').fontSize(9).fillColor(BLUE)

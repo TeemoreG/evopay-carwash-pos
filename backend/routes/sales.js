@@ -275,6 +275,9 @@ router.post('/', async (req, res) => {
     let vscuResponse = null;
     let signature = null;
     let receiptNo = null;
+    let internalData = null;
+    let sdcId = null;
+    let mrcNo = null;
 
     const vscuStart = Date.now();
     try {
@@ -289,6 +292,9 @@ router.post('/', async (req, res) => {
           synced = true;
           signature = vscuResponse.data?.rcptSign || '';
           receiptNo = vscuResponse.data?.rcptNo || vscuResponse.data?.rcptInvcNo || '';
+          internalData = vscuResponse.data?.intrlData || '';
+          sdcId = vscuResponse.data?.sdcId || '';
+          mrcNo = vscuResponse.data?.mrcNo || '';
           console.log(`[SALE][VSCU] ✓ synced in ${Date.now() - vscuStart}ms | rcptNo=${receiptNo}`);
 
           // Push stock movements to VSCU (best-effort)
@@ -380,8 +386,11 @@ router.post('/', async (req, res) => {
     const syncedFlag = synced ? 1 : 0;
 
     await db.runAsync(
-      `UPDATE sales SET status = ?, synced = ?, vscu_signature = ?, receipt_no = ? WHERE id = ?`,
-      [finalStatus, syncedFlag, signature || null, receiptNo || null, saleId]
+      `UPDATE sales SET status = ?, synced = ?, vscu_signature = ?, receipt_no = ?,
+                        internal_data = ?, sdc_id = ?, mrc_no = ?
+       WHERE id = ?`,
+      [finalStatus, syncedFlag, signature || null, receiptNo || null,
+       internalData || null, sdcId || null, mrcNo || null, saleId]
     );
 
     const updatedSale = await db.getAsync(`SELECT * FROM sales WHERE id = ?`, [saleId]);
@@ -589,9 +598,18 @@ router.post('/:id/retry', async (req, res) => {
     if (vscuResponse && (vscuResponse.resultCd === '000' || vscuResponse.resultCd === '00')) {
       await db.runAsync(
         `UPDATE sales SET status = 'Completed', synced = 1, synced_at = ?, 
-         vscu_signature = ?, receipt_no = ? WHERE id = ?`,
-        [now, vscuResponse.data?.rcptSign || '',
-          vscuResponse.data?.rcptNo || vscuResponse.data?.rcptInvcNo || '', req.params.id]
+         vscu_signature = ?, receipt_no = ?,
+         internal_data = ?, sdc_id = ?, mrc_no = ?
+         WHERE id = ?`,
+        [
+          now,
+          vscuResponse.data?.rcptSign || '',
+          vscuResponse.data?.rcptNo || vscuResponse.data?.rcptInvcNo || '',
+          vscuResponse.data?.intrlData || null,
+          vscuResponse.data?.sdcId || null,
+          vscuResponse.data?.mrcNo || null,
+          req.params.id
+        ]
       );
       console.log(`[SALE][RETRY] ✓ synced saleId=${req.params.id}`);
       res.json({ success: true, synced: true, vscuResponse });
