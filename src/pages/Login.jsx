@@ -332,52 +332,14 @@ const Login = () => {
             </div>
           </form>
 
-          <div className="mt-6 pt-4 border-t border-gray-100 flex items-center justify-between text-xs">
-            <span className="text-gray-500">v1.0.0</span>
-            <div className="flex items-center gap-4">
-              <span className="text-gray-500">
-                {now.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Nairobi' })}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className={`w-2 h-2 rounded-full ${
-                  serverOnline === null ? 'bg-gray-400 animate-pulse'
-                  : serverOnline ? 'bg-green-500' : 'bg-red-500'
-                }`} />
-                <span className="text-gray-500">
-                  {serverOnline === null ? 'Checking...' : serverOnline ? 'Online' : 'Offline'}
-                </span>
-              </span>
-            </div>
-          </div>
-
-          {/* ---- Mobile feature strip (hidden on desktop) ---- */}
-          <div className="lg:hidden mt-6 pt-5 border-t border-gray-100">
-            <div className="text-[11px] font-semibold text-[#1a2a4a] uppercase tracking-wider mb-3 text-center">
-              What you get
-            </div>
-            <div className="grid grid-cols-2 gap-2.5">
-              {features.map((f) => (
-                <div key={f.title} className="flex items-start gap-2 bg-[#f5f6fa] rounded-lg p-2.5">
-                  <div className="w-7 h-7 rounded-md bg-[#f47b20]/15 text-[#f47b20] flex items-center justify-center flex-shrink-0">
-                    {f.icon}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="font-semibold text-[#1a2a4a] text-[11px] leading-tight">{f.title}</div>
-                    <div className="text-[10px] text-gray-500 leading-tight mt-0.5">{f.desc}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="mt-4 flex items-center justify-center gap-3 text-[10px] text-gray-400">
-              <span>KRA eTIMS VSCU v2.0.21</span>
-              <span className="w-1 h-1 rounded-full bg-gray-300" />
-              <span>Powered by Evopay</span>
-            </div>
+          <div className="mt-4 flex items-center justify-center gap-3 text-[10px] text-gray-400">
+            <span>KRA eTIMS VSCU v2.0.21</span>
+            <span className="w-1 h-1 rounded-full bg-gray-300" />
+            <span>Powered by Evopay</span>
           </div>
         </div>
       </div>
     </div>
   );
 };
-
 export default Login;
