@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import evopayLogo from '../assets/evopay-logo.jpg';
+import evopayLogo from '../assets/log2.png';
 import axiosInstance from '../api/axiosConfig';
 
 const Login = () => {
@@ -13,7 +13,6 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [logoError, setLogoError] = useState(false);
-  const [darkMode, setDarkMode] = useState(false);
   const [lockoutUntil, setLockoutUntil] = useState(0);
   const [attempts, setAttempts] = useState(0);
   const [serverOnline, setServerOnline] = useState(null);
@@ -23,25 +22,20 @@ const Login = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
 
-  // ---- Init: remember username, dark mode, autofocus ----
   useEffect(() => {
     const saved = localStorage.getItem('evopay_last_user');
     if (saved) {
       setUsername(saved);
       setRememberMe(true);
     }
-    const dm = localStorage.getItem('evopay_dark');
-    if (dm === '1') setDarkMode(true);
     usernameRef.current?.focus();
   }, []);
 
-  // ---- Live clock in footer ----
   useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 1000 * 30);
+    const t = setInterval(() => setNow(new Date()), 30000);
     return () => clearInterval(t);
   }, []);
 
-  // ---- Server health ping ----
   useEffect(() => {
     let cancelled = false;
     const ping = async () => {
@@ -57,19 +51,12 @@ const Login = () => {
     return () => { cancelled = true; clearInterval(t); };
   }, []);
 
-  // ---- Dark mode persist ----
-  useEffect(() => {
-    localStorage.setItem('evopay_dark', darkMode ? '1' : '0');
-  }, [darkMode]);
-
-  // ---- Caps lock detection ----
   const handleKeyEvent = (e) => {
     if (typeof e.getModifierState === 'function') {
       setCapsLock(e.getModifierState('CapsLock'));
     }
   };
 
-  // ---- Lockout countdown ----
   const lockRemaining = Math.max(0, Math.ceil((lockoutUntil - Date.now()) / 1000));
 
   const handleSubmit = async (e) => {
@@ -126,118 +113,114 @@ const Login = () => {
     }
   };
 
-  const bg = darkMode ? 'bg-[#0f1626]' : 'bg-[#f5f6fa]';
-  const card = darkMode
-    ? 'bg-[#1a2236] border-[#2a3450]'
-    : 'bg-white border-gray-100';
-  const heading = darkMode ? 'text-white' : 'text-[#1a2a4a]';
-  const subtext = darkMode ? 'text-gray-400' : 'text-gray-500';
-  const label = darkMode ? 'text-gray-300' : 'text-gray-700';
-  const input = darkMode
-    ? 'bg-[#0f1626] border-[#2a3450] text-white placeholder-gray-500'
-    : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400';
+  const features = [
+    {
+      title: 'KRA eTIMS Certified',
+      desc: 'Every sale is signed and verified with KRA in real time.',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+        </svg>
+      ),
+    },
+    {
+      title: 'M-Pesa Payments',
+      desc: 'Dynamic QR, STK push, and instant payment confirmation.',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+        </svg>
+      ),
+    },
+    {
+      title: 'Fast Checkout',
+      desc: 'Walk-in services and retail products in one cart.',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </svg>
+      ),
+    },
+    {
+      title: 'Instant Receipts',
+      desc: 'Thermal print, PDF download, and SMS delivery.',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+      ),
+    },
+  ];
 
   return (
-    <div className={`min-h-screen flex items-center justify-center ${bg} p-4 relative overflow-hidden transition-colors`}>
-      {/* Animated brand bubbles */}
+    <div className="min-h-screen flex items-center justify-center bg-[#f5f6fa] p-4 relative overflow-hidden">
+      {/* Brand bubbles (light) */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-[#f47b20] opacity-[0.07] blur-3xl animate-pulse" />
-        <div className="absolute -bottom-40 -right-24 w-[500px] h-[500px] rounded-full bg-[#1a2a4a] opacity-[0.08] blur-3xl animate-pulse" style={{ animationDuration: '6s' }} />
-        <div className="absolute top-1/3 right-10 w-40 h-40 rounded-full bg-[#f47b20] opacity-[0.06] blur-2xl animate-pulse" style={{ animationDuration: '4s' }} />
+        <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-[#f47b20] opacity-[0.08] blur-3xl animate-pulse" />
+        <div className="absolute -bottom-40 -right-24 w-[500px] h-[500px] rounded-full bg-[#f47b20] opacity-[0.06] blur-3xl animate-pulse" style={{ animationDuration: '6s' }} />
+        <div className="absolute top-1/3 right-10 w-40 h-40 rounded-full bg-[#1a2a4a] opacity-[0.05] blur-2xl animate-pulse" style={{ animationDuration: '4s' }} />
       </div>
 
-      {/* Dark mode toggle */}
-      <button
-        type="button"
-        onClick={() => setDarkMode(!darkMode)}
-        className={`absolute top-4 right-4 z-20 p-2.5 rounded-full border transition-colors ${
-          darkMode
-            ? 'bg-[#1a2236] border-[#2a3450] text-yellow-300 hover:bg-[#232d44]'
-            : 'bg-white border-gray-200 text-[#1a2a4a] hover:bg-gray-50'
-        }`}
-        aria-label="Toggle dark mode"
-      >
-        {darkMode ? (
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-          </svg>
-        ) : (
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-          </svg>
-        )}
-      </button>
-
-      <div className={`relative z-10 w-full max-w-5xl grid lg:grid-cols-2 rounded-2xl shadow-2xl overflow-hidden border ${card}`}>
-        {/* ---- Brand side panel (desktop only) ---- */}
-        <div className="hidden lg:flex flex-col justify-between p-10 bg-gradient-to-br from-[#1a2a4a] to-[#0f1a30] text-white">
-          <div>
-            <div className="flex items-center gap-3 mb-10">
-              {!logoError ? (
-                <img
-                  src={evopayLogo}
-                  alt="Evopay"
-                  onError={() => setLogoError(true)}
-                  className="h-12 w-12 object-contain rounded-lg bg-white/10 p-1"
-                />
-              ) : (
-                <div className="h-12 w-12 rounded-lg bg-[#f47b20] flex items-center justify-center font-bold text-white text-xl">E</div>
-              )}
-              <div>
-                <div className="font-bold text-lg leading-tight">Evopay</div>
-                <div className="text-xs text-white/60">Car Wash POS</div>
-              </div>
-            </div>
-
-            <h2 className="text-3xl font-bold mb-3 leading-tight">
-              Fast. Compliant.<br />
-              <span className="text-[#f47b20]">Ready to wash.</span>
-            </h2>
-            <p className="text-white/70 text-sm mb-8">
-              Walk-in point of sale with KRA eTIMS tax compliance and M-Pesa payments built in.
-            </p>
-
-            <ul className="space-y-3 text-sm">
-              {[
-                'KRA eTIMS certified receipts',
-                'M-Pesa QR & STK push',
-                'Instant thermal printing',
-                'Real-time sales dashboard',
-              ].map((f) => (
-                <li key={f} className="flex items-center gap-3">
-                  <span className="w-5 h-5 rounded-full bg-[#f47b20]/20 flex items-center justify-center flex-shrink-0">
-                    <svg className="w-3 h-3 text-[#f47b20]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
-                    </svg>
-                  </span>
-                  <span className="text-white/85">{f}</span>
-                </li>
-              ))}
-            </ul>
+      <div className="relative z-10 w-full max-w-5xl grid lg:grid-cols-2 gap-6 items-center">
+        {/* ---- Info / Features column (desktop) ---- */}
+        <div className="hidden lg:block">
+          <div className="mb-6">
+            {!logoError ? (
+              <img
+                src={evopayLogo}
+                alt="Evopay"
+                onError={() => setLogoError(true)}
+                className="h-16 object-contain"
+              />
+            ) : (
+              <div className="h-16 w-16 rounded-2xl bg-[#f47b20] flex items-center justify-center font-bold text-white text-2xl">E</div>
+            )}
           </div>
 
-          <div className="text-xs text-white/40 pt-6 border-t border-white/10">
-            KRA eTIMS VSCU v2.0.21
+          <h2 className="text-4xl font-bold text-[#1a2a4a] leading-tight mb-3">
+            Fast. Compliant.<br />
+            <span className="text-[#f47b20]">Ready to wash.</span>
+          </h2>
+          <p className="text-gray-500 text-sm mb-8 max-w-md">
+            Walk-in car wash point of sale with KRA eTIMS tax compliance and M-Pesa payments built in.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {features.map((f) => (
+              <div key={f.title} className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm hover:shadow-md transition">
+                <div className="w-9 h-9 rounded-lg bg-[#f47b20]/10 text-[#f47b20] flex items-center justify-center mb-3">
+                  {f.icon}
+                </div>
+                <div className="font-semibold text-[#1a2a4a] text-sm mb-1">{f.title}</div>
+                <div className="text-xs text-gray-500 leading-relaxed">{f.desc}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-8 flex items-center gap-4 text-xs text-gray-400">
+            <span>KRA eTIMS VSCU v2.0.21</span>
+            <span className="w-1 h-1 rounded-full bg-gray-300" />
+            <span>Powered by Evopay</span>
           </div>
         </div>
 
-        {/* ---- Form side ---- */}
-        <div className="p-8 sm:p-10">
-          <div className="text-center lg:text-left mb-8">
+        {/* ---- Login card ---- */}
+        <div className="w-full max-w-md mx-auto bg-white rounded-2xl shadow-2xl border border-gray-100 p-8 sm:p-10">
+          <div className="text-center mb-8">
             <div className="lg:hidden flex justify-center mb-4">
               {!logoError ? (
                 <img
                   src={evopayLogo}
                   alt="Evopay"
                   onError={() => setLogoError(true)}
-                  className="h-16 object-contain"
+                  className="h-20 object-contain"
                 />
               ) : (
-                <div className="h-16 w-16 rounded-2xl bg-[#f47b20] flex items-center justify-center font-bold text-white text-2xl">E</div>
+                <div className="h-20 w-20 rounded-2xl bg-[#f47b20] flex items-center justify-center font-bold text-white text-3xl">E</div>
               )}
             </div>
-            <h1 className={`text-2xl font-bold ${heading}`}>Welcome back</h1>
-            <p className={`text-sm mt-1 ${subtext}`}>Sign in to continue to your POS</p>
+            <h1 className="text-2xl font-bold text-[#1a2a4a]">Car Wash POS</h1>
+            <p className="text-sm mt-1 text-gray-500">Sign in to continue</p>
           </div>
 
           {error && (
@@ -258,21 +241,21 @@ const Login = () => {
           <form onSubmit={handleSubmit}>
             <div className="space-y-4">
               <div>
-                <label className={`block text-sm font-medium mb-1.5 ${label}`}>Username</label>
+                <label className="block text-sm font-medium mb-1.5 text-gray-700">Username</label>
                 <input
                   ref={usernameRef}
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   autoComplete="username"
-                  className={`w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-[#f47b20] focus:border-transparent outline-none transition ${input}`}
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f47b20] focus:border-transparent outline-none transition bg-white text-gray-900 placeholder-gray-400"
                   placeholder="Enter your username"
                   required
                 />
               </div>
 
               <div>
-                <label className={`block text-sm font-medium mb-1.5 ${label}`}>Password</label>
+                <label className="block text-sm font-medium mb-1.5 text-gray-700">Password</label>
                 <div className="relative">
                   <input
                     type={showPassword ? 'text' : 'password'}
@@ -281,14 +264,14 @@ const Login = () => {
                     onKeyUp={handleKeyEvent}
                     onKeyDown={handleKeyEvent}
                     autoComplete="current-password"
-                    className={`w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-[#f47b20] focus:border-transparent outline-none pr-11 transition ${input}`}
+                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f47b20] focus:border-transparent outline-none pr-11 transition bg-white text-gray-900 placeholder-gray-400"
                     placeholder="Enter your password"
                     required
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className={`absolute right-3 top-1/2 -translate-y-1/2 ${darkMode ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'}`}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                     aria-label={showPassword ? 'Hide password' : 'Show password'}
                   >
                     {showPassword ? (
@@ -314,7 +297,7 @@ const Login = () => {
               </div>
 
               <div className="flex items-center justify-between">
-                <label className={`flex items-center gap-2 text-sm cursor-pointer select-none ${label}`}>
+                <label className="flex items-center gap-2 text-sm cursor-pointer select-none text-gray-700">
                   <input
                     type="checkbox"
                     checked={rememberMe}
@@ -349,10 +332,10 @@ const Login = () => {
             </div>
           </form>
 
-          <div className={`mt-6 pt-4 border-t ${darkMode ? 'border-[#2a3450]' : 'border-gray-100'} flex items-center justify-between text-xs`}>
-            <span className={subtext}>v1.0.0</span>
+          <div className="mt-6 pt-4 border-t border-gray-100 flex items-center justify-between text-xs">
+            <span className="text-gray-500">v1.0.0</span>
             <div className="flex items-center gap-4">
-              <span className={subtext}>
+              <span className="text-gray-500">
                 {now.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Nairobi' })}
               </span>
               <span className="flex items-center gap-1.5">
@@ -360,10 +343,35 @@ const Login = () => {
                   serverOnline === null ? 'bg-gray-400 animate-pulse'
                   : serverOnline ? 'bg-green-500' : 'bg-red-500'
                 }`} />
-                <span className={subtext}>
+                <span className="text-gray-500">
                   {serverOnline === null ? 'Checking...' : serverOnline ? 'Online' : 'Offline'}
                 </span>
               </span>
+            </div>
+          </div>
+
+          {/* ---- Mobile feature strip (hidden on desktop) ---- */}
+          <div className="lg:hidden mt-6 pt-5 border-t border-gray-100">
+            <div className="text-[11px] font-semibold text-[#1a2a4a] uppercase tracking-wider mb-3 text-center">
+              What you get
+            </div>
+            <div className="grid grid-cols-2 gap-2.5">
+              {features.map((f) => (
+                <div key={f.title} className="flex items-start gap-2 bg-[#f5f6fa] rounded-lg p-2.5">
+                  <div className="w-7 h-7 rounded-md bg-[#f47b20]/15 text-[#f47b20] flex items-center justify-center flex-shrink-0">
+                    {f.icon}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="font-semibold text-[#1a2a4a] text-[11px] leading-tight">{f.title}</div>
+                    <div className="text-[10px] text-gray-500 leading-tight mt-0.5">{f.desc}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 flex items-center justify-center gap-3 text-[10px] text-gray-400">
+              <span>KRA eTIMS VSCU v2.0.21</span>
+              <span className="w-1 h-1 rounded-full bg-gray-300" />
+              <span>Powered by Evopay</span>
             </div>
           </div>
         </div>
