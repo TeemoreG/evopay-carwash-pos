@@ -17,6 +17,16 @@ import { useNavigate } from 'react-router-dom';
 
 const TAX_RATES = { A: 0, B: 0.16, C: 0 };
 
+// POS terminal icon (device with card) — matches sidebar
+const PosIcon = ({ className = 'w-4 h-4' }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+  </svg>
+);
+
+// Terminal screen + base icon (alternative, for reference — not used)
+// <svg ...><path d="M9 7h6m-6 4h6m-6 4h3M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z" /></svg>
+
 const Sales = () => {
   const { user } = useAuth();
   const [items, setItems] = useState([]);
@@ -343,43 +353,60 @@ const Sales = () => {
   return (
     <div className="min-h-screen bg-[#f8fafc] flex flex-col">
 
-      <div className="bg-white border-b border-slate-200/80 px-3 py-2 sticky top-0 z-30">
+      {/* ============ POS HEADER ============ */}
+      <div className="bg-white border-b border-slate-200/80 px-3 py-2 sticky top-0 z-30 shadow-sm">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="w-8 h-8 rounded-lg bg-[#f47b20] flex items-center justify-center shrink-0">
-              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 17h14M5 17a2 2 0 01-2-2v-3.5a2 2 0 011.2-1.84l1.34-.56a2 2 0 00.88-.76l1.1-1.7A2 2 0 009.34 6h5.32a2 2 0 001.82 1.14l1.1 1.7a2 2 0 00.88.76l1.34.56A2 2 0 0121 12.5V15a2 2 0 01-2 2M5 17a2 2 0 104 0m10 0a2 2 0 11-4 0" />
-              </svg>
+          {/* Left — POS branding */}
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-9 h-9 rounded-lg bg-[#f47b20] flex items-center justify-center shrink-0 shadow-sm">
+              <PosIcon className="w-5 h-5 text-white" />
             </div>
             <div className="min-w-0">
-              <h1 className="text-sm font-bold text-[#1a2a4a] leading-tight">POS</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-sm font-bold text-[#1a2a4a] leading-tight">Point of Sale</h1>
+                <span className="text-[9px] font-semibold text-[#f47b20] bg-[#f47b20]/10 px-1.5 py-0.5 rounded">
+                  POS
+                </span>
+              </div>
               <p className="text-[10px] text-slate-400 truncate">
                 {user?.full_name || user?.username || 'Cashier'} · {timeStr}
               </p>
             </div>
           </div>
 
-          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border ${
-            vscuOnline ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'
-          }`}>
-            <span className={`text-[10px] font-semibold ${vscuOnline ? 'text-emerald-700' : 'text-rose-700'}`}>
-              {vscuOnline ? 'Online' : 'Offline'}
-            </span>
+          {/* Right — Status */}
+          <div className="flex items-center gap-2 shrink-0">
+            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border ${
+              vscuOnline ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'
+            }`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${vscuOnline ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+              <span className={`text-[10px] font-semibold ${vscuOnline ? 'text-emerald-700' : 'text-rose-700'}`}>
+                VSCU {vscuOnline ? 'Online' : 'Offline'}
+              </span>
+            </div>
           </div>
         </div>
 
+        {/* Stats bar */}
         <div className="flex items-center gap-2 mt-2">
-          <div className="flex-1 flex items-center justify-center gap-3 px-3 py-1.5 bg-slate-50 rounded-lg border border-slate-200">
-            <div className="text-xs text-slate-500">
-              Today <span className="font-bold text-[#1a2a4a]">{todayStats.count}</span>
+          <div className="flex-1 flex items-center justify-between gap-3 px-3 py-1.5 bg-slate-50 rounded-lg border border-slate-200">
+            <div className="flex items-center gap-3">
+              <div className="text-xs text-slate-500">
+                Today <span className="font-bold text-[#1a2a4a]">{todayStats.count}</span>
+                <span className="text-slate-400"> sale{todayStats.count !== 1 ? 's' : ''}</span>
+              </div>
+              <div className="w-px h-3 bg-slate-300" />
+              <div className="text-xs text-slate-500">
+                <span className="font-bold text-[#f47b20]">KES {todayStats.revenue.toLocaleString()}</span>
+              </div>
             </div>
-            <div className="w-px h-3 bg-slate-300"></div>
-            <div className="text-xs text-slate-500">
-              <span className="font-bold text-[#f47b20]">KES {todayStats.revenue.toLocaleString()}</span>
+            <div className="text-[10px] text-slate-400 hidden sm:block">
+              {itemCount > 0 ? `${itemCount} item${itemCount !== 1 ? 's' : ''} in cart` : 'Cart empty'}
             </div>
           </div>
         </div>
 
+        {/* Mobile tabs */}
         <div className="lg:hidden mt-2 flex bg-slate-100 rounded-lg p-0.5">
           {[
             { id: 'services', label: 'Services', icon: 'M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z' },
@@ -407,13 +434,14 @@ const Sales = () => {
         </div>
       </div>
 
+      {/* ============ DESKTOP GRID ============ */}
       <div className="hidden lg:grid flex-1 grid-cols-12 gap-3 p-4">
         <div className="lg:col-span-7 xl:col-span-8 h-[calc(100vh-180px)] min-h-125">
           <ServiceGrid items={items} onAdd={addToCart} />
         </div>
         <div className="lg:col-span-5 xl:col-span-4 flex flex-col h-[calc(100vh-180px)] min-h-125">
           <div className="flex-1 min-h-0">
-                        <Cart
+            <Cart
               lines={lines}
               onQty={handleQty}
               onRemove={handleRemove}
@@ -440,6 +468,7 @@ const Sales = () => {
         </div>
       </div>
 
+      {/* ============ MOBILE CONTENT ============ */}
       <div className="lg:hidden flex-1 p-3 pb-32">
         {mobileTab === 'services' && (
           <div className="h-[calc(100vh-280px)] min-h-80">
@@ -448,7 +477,7 @@ const Sales = () => {
         )}
         {mobileTab === 'cart' && (
           <div className="h-[calc(100vh-280px)] min-h-80">
-                        <Cart
+            <Cart
               lines={lines}
               onQty={handleQty}
               onRemove={handleRemove}
@@ -476,6 +505,7 @@ const Sales = () => {
         )}
       </div>
 
+      {/* Mobile payment bar */}
       {mobileTab === 'cart' && (
         <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-3 z-30 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
           <div className="flex items-center justify-between mb-2">
@@ -497,10 +527,12 @@ const Sales = () => {
         </div>
       )}
 
+      {/* Desktop recent sales */}
       <div className="hidden lg:block p-3 sm:p-4 lg:pt-0">
         <RecentSalesPanel sales={sales} loading={loading} />
       </div>
 
+      {/* Keyboard shortcuts hint */}
       <div className="hidden lg:flex fixed bottom-3 right-3 items-center gap-3 bg-white/95 border border-slate-200 rounded-lg px-3 py-2 text-[10px] text-slate-500 shadow-sm z-20">
         <span className="flex items-center gap-1">
           <kbd className="px-1.5 py-0.5 bg-slate-100 border border-slate-300 rounded text-[9px] font-mono">F1</kbd> Cash

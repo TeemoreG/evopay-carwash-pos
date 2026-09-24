@@ -26,7 +26,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }) => {
       label: 'Main',
       links: [
         { to: '/', label: 'Dashboard', icon: 'dashboard' },
-        { to: '/sales', label: 'POS', icon: 'car', primary: true },
+        { to: '/sales', label: 'POS', icon: 'pos', primary: true },
       ],
     },
     {
@@ -60,9 +60,9 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }) => {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm0 10a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10-10a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zm0 10a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
         </svg>
       ),
-      car: (
+      pos: (
         <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 17h14M5 17a2 2 0 01-2-2v-3.5a2 2 0 011.2-1.84l1.34-.56a2 2 0 00.88-.76l1.1-1.7A2 2 0 009.34 6h5.32a2 2 0 001.82 1.14l1.1 1.7a2 2 0 00.88.76l1.34.56A2 2 0 0121 12.5V15a2 2 0 01-2 2M5 17a2 2 0 104 0m10 0a2 2 0 11-4 0" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
         </svg>
       ),
       droplets: (
@@ -201,5 +201,4 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }) => {
     </>
   );
 };
-
 export default Sidebar;
