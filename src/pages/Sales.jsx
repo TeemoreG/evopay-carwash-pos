@@ -14,18 +14,17 @@ import {
 } from '../api/vscuApi';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import posIcon from '../assets/pos-icon.png';
 
 const TAX_RATES = { A: 0, B: 0.16, C: 0 };
 
-// POS terminal icon (device with card) — matches sidebar
-const PosIcon = ({ className = 'w-4 h-4' }) => (
-  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-  </svg>
+const PosIcon = ({ className = 'w-7 h-7' }) => (
+  <img
+    src={posIcon}
+    alt="POS"
+    className={`${className} object-contain`}
+  />
 );
-
-// Terminal screen + base icon (alternative, for reference — not used)
-// <svg ...><path d="M9 7h6m-6 4h6m-6 4h3M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z" /></svg>
 
 const Sales = () => {
   const { user } = useAuth();
@@ -355,33 +354,33 @@ const Sales = () => {
 
       {/* ============ POS HEADER ============ */}
       <div className="bg-white border-b border-slate-200/80 px-3 py-2 sticky top-0 z-30 shadow-sm">
-        <div className="flex items-center justify-between gap-2">
-          {/* Left — POS branding */}
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-9 h-9 rounded-lg bg-[#f47b20] flex items-center justify-center shrink-0 shadow-sm">
-              <PosIcon className="w-5 h-5 text-white" />
-            </div>
+        <div className="flex items-center justify-between gap-3">
+          {/* Left spacer for balance */}
+          <div className="w-16 hidden sm:block"></div>
+
+          {/* Center — POS branding */}
+          <div className="flex items-center gap-3 min-w-0">
+            <PosIcon className="w-8 h-8" />
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h1 className="text-sm font-bold text-[#1a2a4a] leading-tight">Point of Sale</h1>
-                <span className="text-[9px] font-semibold text-[#f47b20] bg-[#f47b20]/10 px-1.5 py-0.5 rounded">
-                  POS
+                <h1 className="text-[17px] font-bold text-[#1a2a4a] leading-tight">Point of Sale</h1>
+                <span className="text-[12px] font-semibold text-[#f47b20] bg-[#f47b20]/10 px-1.5 py-0.5 rounded">
                 </span>
               </div>
-              <p className="text-[10px] text-slate-400 truncate">
+              <p className="text-[12px] text-slate-400 truncate">
                 {user?.full_name || user?.username || 'Cashier'} · {timeStr}
               </p>
             </div>
           </div>
 
-          {/* Right — Status */}
-          <div className="flex items-center gap-2 shrink-0">
+          {/* Right — VSCU status */}
+          <div className="w-16 hidden sm:flex justify-end">
             <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border ${
               vscuOnline ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'
             }`}>
               <span className={`w-1.5 h-1.5 rounded-full ${vscuOnline ? 'bg-emerald-500' : 'bg-rose-500'}`} />
               <span className={`text-[10px] font-semibold ${vscuOnline ? 'text-emerald-700' : 'text-rose-700'}`}>
-                VSCU {vscuOnline ? 'Online' : 'Offline'}
+                {vscuOnline ? 'Online' : 'Offline'}
               </span>
             </div>
           </div>
