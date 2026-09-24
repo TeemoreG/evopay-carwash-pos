@@ -373,16 +373,8 @@ const Sales = () => {
             </div>
           </div>
 
-          {/* Right — VSCU status */}
-          <div className="w-16 hidden sm:flex justify-end">
-            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border ${
-              vscuOnline ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'
-            }`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${vscuOnline ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-              <span className={`text-[10px] font-semibold ${vscuOnline ? 'text-emerald-700' : 'text-rose-700'}`}>
-                {vscuOnline ? 'Online' : 'Offline'}
-              </span>
-            </div>
+            <div className={`flex items-center gap-1.5 px-2.5 py-1
+            `}>
           </div>
         </div>
 
